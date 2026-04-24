@@ -1,5 +1,6 @@
 import sqlite3
 from pathlib import Path
+import json
 
 DB_PATH = Path("data/banco_preguntas.db")
 
@@ -29,24 +30,10 @@ def crear_tablas():
         enunciado TEXT NOT NULL,
         texto_base TEXT,
         imagen TEXT,
-        opcion_a TEXT NOT NULL,
-        opcion_b TEXT NOT NULL,
-        opcion_c TEXT NOT NULL,
-        opcion_d TEXT NOT NULL,
-        profesor TEXT,
-        profesor_nombre TEXT,
-        archivo_origen TEXT,
-        fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS archivos_subidos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nombre_archivo TEXT NOT NULL,
-        tipo TEXT NOT NULL,
+        opciones_json TEXT NOT NULL,
         profesor_usuario TEXT,
-        profesor_nombre TEXT,
+        profesor_nombre TEXT NOT NULL,
+        lote_id TEXT,
         fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
@@ -62,9 +49,11 @@ def migrar_bd():
     columnas = [c[1] for c in cursor.fetchall()]
 
     nuevas_columnas = {
-        "texto_base": "TEXT",
+        "opciones_json": "TEXT",
+        "profesor_usuario": "TEXT",
         "profesor_nombre": "TEXT",
-        "archivo_origen": "TEXT"
+        "texto_base": "TEXT",
+        "lote_id": "TEXT",
     }
 
     for col, tipo in nuevas_columnas.items():
@@ -106,40 +95,29 @@ def validar_usuario(usuario, clave):
     conn.close()
     return data
 
-def registrar_archivo(nombre_archivo, tipo, profesor_usuario=None, profesor_nombre=None):
+def guardar_preguntas_lote(preguntas):
     conn = conectar()
     cursor = conn.cursor()
-    cursor.execute("""
-    INSERT INTO archivos_subidos (nombre_archivo, tipo, profesor_usuario, profesor_nombre)
-    VALUES (?, ?, ?, ?)
-    """, (nombre_archivo, tipo, profesor_usuario, profesor_nombre))
-    conn.commit()
-    conn.close()
 
-def guardar_pregunta(p):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("""
-    INSERT INTO preguntas (
-        grado, materia, numero, enunciado, texto_base, imagen,
-        opcion_a, opcion_b, opcion_c, opcion_d,
-        profesor, profesor_nombre, archivo_origen
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        p["grado"],
-        p["materia"],
-        p["numero"],
-        p["enunciado"],
-        p.get("texto_base"),
-        p.get("imagen"),
-        p["opciones"]["A"],
-        p["opciones"]["B"],
-        p["opciones"]["C"],
-        p["opciones"]["D"],
-        p.get("profesor"),
-        p.get("profesor_nombre"),
-        p.get("archivo_origen")
-    ))
+    for p in preguntas:
+        cursor.execute("""
+        INSERT INTO preguntas (
+            grado, materia, numero, enunciado, texto_base, imagen,
+            opciones_json, profesor_usuario, profesor_nombre, lote_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            p["grado"],
+            p["materia"],
+            p["numero"],
+            p["enunciado"],
+            p.get("texto_base"),
+            p.get("imagen"),
+            json.dumps(p["opciones"], ensure_ascii=False),
+            p.get("profesor_usuario"),
+            p["profesor_nombre"],
+            p.get("lote_id")
+        ))
+
     conn.commit()
     conn.close()
 
@@ -149,8 +127,7 @@ def listar_preguntas(grado=None, materia=None):
 
     query = """
     SELECT id, grado, materia, numero, enunciado, texto_base, imagen,
-           opcion_a, opcion_b, opcion_c, opcion_d,
-           profesor, profesor_nombre, archivo_origen, fecha
+           opciones_json, profesor_usuario, profesor_nombre, lote_id, fecha
     FROM preguntas
     WHERE 1=1
     """
@@ -172,6 +149,11 @@ def listar_preguntas(grado=None, materia=None):
 
     preguntas = []
     for r in rows:
+        try:
+            opciones = json.loads(r[7]) if r[7] else {}
+        except Exception:
+            opciones = {}
+
         preguntas.append({
             "id": r[0],
             "grado": r[1],
@@ -180,16 +162,11 @@ def listar_preguntas(grado=None, materia=None):
             "enunciado": r[4],
             "texto_base": r[5],
             "imagen": r[6],
-            "opciones": {
-                "A": r[7],
-                "B": r[8],
-                "C": r[9],
-                "D": r[10],
-            },
-            "profesor": r[11],
-            "profesor_nombre": r[12],
-            "archivo_origen": r[13],
-            "fecha": r[14],
+            "opciones": opciones,
+            "profesor_usuario": r[8],
+            "profesor_nombre": r[9],
+            "lote_id": r[10],
+            "fecha": r[11],
         })
     return preguntas
 
@@ -209,13 +186,6 @@ def obtener_materias():
     conn.close()
     return data
 
-def eliminar_pregunta(id_pregunta):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM preguntas WHERE id=?", (id_pregunta,))
-    conn.commit()
-    conn.close()
-
 def eliminar_preguntas_por_ids(ids):
     if not ids:
         return
@@ -225,51 +195,3 @@ def eliminar_preguntas_por_ids(ids):
     cursor.execute(f"DELETE FROM preguntas WHERE id IN ({placeholders})", ids)
     conn.commit()
     conn.close()
-
-def listar_archivos_subidos():
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("""
-    SELECT id, nombre_archivo, tipo, profesor_usuario, profesor_nombre, fecha
-    FROM archivos_subidos
-    ORDER BY fecha DESC
-    """)
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [
-        {
-            "id": r[0],
-            "nombre_archivo": r[1],
-            "tipo": r[2],
-            "profesor_usuario": r[3],
-            "profesor_nombre": r[4],
-            "fecha": r[5],
-        }
-        for r in rows
-    ]
-
-def eliminar_archivo_registro(id_archivo):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT nombre_archivo, tipo FROM archivos_subidos WHERE id=?", (id_archivo,))
-    row = cursor.fetchone()
-
-    if row:
-        nombre_archivo, tipo = row
-        if tipo == "documento":
-            ruta = Path("data/uploads") / nombre_archivo
-        else:
-            ruta = Path("data/images") / nombre_archivo
-
-        if ruta.exists():
-            ruta.unlink()
-
-        cursor.execute("DELETE FROM archivos_subidos WHERE id=?", (id_archivo,))
-        conn.commit()
-
-    conn.close()
-
-def eliminar_archivos_por_ids(ids):
-    for id_archivo in ids:
-        eliminar_archivo_registro(id_archivo)

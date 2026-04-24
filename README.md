@@ -1,80 +1,44 @@
-# App Banco de Preguntas - Streamlit v4
+# App Banco de Preguntas - Streamlit v9
 
-## Instalación
+## Cambios v8
+
+- El profesor diligencia exactamente 20 preguntas.
+- Navegación con botones Anterior y Siguiente.
+- También conserva selector rápido de pregunta.
+- Todo lo escrito se mantiene en memoria hasta guardar las 20 preguntas.
+- Imagen opcional por pregunta.
+- Texto base opcional por pregunta.
+- Opciones desde A, B, C hasta máximo H.
+- Se eliminó la exportación JSON.
+
+## Usuarios iniciales
+
+Administrador:
+
+usuario: admin
+clave: admin123
+
+Profesor:
+
+usuario: profesor
+clave: profe123
+
+## Ejecutar
 
 ```bash
 pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
-## Usuarios iniciales
 
-Administrador:
+## Ajustes v9
 
-```txt
-usuario: admin
-clave: admin123
-```
+- Se corrigió el conflicto de Streamlit con el selector de preguntas y `session_state`.
+- Los botones Anterior y Siguiente ahora navegan sin generar advertencias.
 
-Profesor:
+## Ajustes v9
 
-```txt
-usuario: profesor
-clave: profe123
-```
-
-## Formato base
-
-```txt
-GRADO: 8
-MATERIA: Ciencias Sociales
-
-PREGUNTA 1:
-Texto de la pregunta.
-
-IMAGEN: pregunta1.png
-
-A. Opción A
-B. Opción B
-C. Opción C
-D. Opción D
-```
-
-La imagen es opcional.
-
-## Formato con texto base opcional
-
-```txt
-GRADO: 8
-MATERIA: Lengua Castellana
-
-TEXTO BASE 1:
-Aquí va la lectura, fragmento o información base.
-Puede tener varias líneas.
-FIN TEXTO BASE
-
-PREGUNTA 1:
-Pregunta relacionada con el texto base.
-
-A. Opción A
-B. Opción B
-C. Opción C
-D. Opción D
-
-PREGUNTA 2:
-Otra pregunta relacionada con el mismo texto base.
-
-A. Opción A
-B. Opción B
-C. Opción C
-D. Opción D
-```
-
-Reglas:
-
-- GRADO, MATERIA, PREGUNTA y opciones A, B, C, D son obligatorios.
-- IMAGEN es opcional.
-- TEXTO BASE es opcional.
-- Si se usa TEXTO BASE, debe cerrarse con FIN TEXTO BASE.
-- Las preguntas posteriores quedan asociadas al último texto base encontrado.
-- Si aparece otro TEXTO BASE, las siguientes preguntas se asocian al nuevo texto.
+- Portada rediseñada para parecerse más al formato de referencia.
+- El administrador puede seleccionar período.
+- El administrador puede seleccionar primera o segunda sesión.
+- El PDF interactivo exige contraseña definida por el administrador al generarlo.
