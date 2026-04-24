@@ -2,6 +2,8 @@ import streamlit as st
 from pathlib import Path
 import shutil
 import pandas as pd
+from pdf_interactivo import generar_pdf_interactivo
+
 
 from database import (
     crear_tablas,
@@ -171,24 +173,34 @@ def vista_admin():
                 )
 
     st.divider()
+    st.subheader("📘 Generar PDF interactivo")
 
-    st.subheader("📱 Exportar preguntas para Android")
+    nombre_pdf_interactivo = st.text_input(
+    "Nombre del PDF interactivo",
+    value="preguntas_interactivas.pdf"
+    )
 
-    nombre_json = st.text_input("Nombre del archivo JSON para Android", value="preguntas_android.json")
-
-    if st.button("Exportar JSON para APK"):
+    if st.button("Generar PDF interactivo"):
         if not preguntas:
-            st.error("No hay preguntas para exportar.")
+            st.error("No hay preguntas para generar PDF interactivo.")
         else:
-            ruta_json = exportar_json_android(preguntas, nombre_json)
-            st.success("Archivo JSON exportado correctamente.")
-            with open(ruta_json, "rb") as f:
-                st.download_button(
-                    "Descargar JSON",
-                    data=f,
-                    file_name=nombre_json,
-                    mime="application/json"
-                )
+            ruta_pdf_interactivo = generar_pdf_interactivo(
+            preguntas,
+            nombre_pdf_interactivo
+        )
+
+        st.success("PDF interactivo generado correctamente.")
+
+        with open(ruta_pdf_interactivo, "rb") as f:
+            st.download_button(
+                "Descargar PDF interactivo",
+                data=f,
+                file_name=nombre_pdf_interactivo,
+                mime="application/pdf"
+            )
+    
+
+    
 
 def main():
     if "usuario" not in st.session_state:
