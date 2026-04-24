@@ -1,0 +1,72 @@
+GRADO: 8
+MATERIA: Lengua Castellana
+
+TEXTO BASE 1:
+La lectura permite desarrollar la imaginación, mejorar el vocabulario y comprender mejor el mundo. En la escuela, leer no solo significa pronunciar palabras, sino interpretar, analizar y formar una opinión sobre lo leído.
+FIN TEXTO BASE
+
+PREGUNTA 1:
+Según el texto, leer permite:
+
+A. Memorizar sin comprender
+B. Mejorar el vocabulario y comprender el mundo
+C. Evitar el análisis
+D. Repetir palabras sin sentido
+
+PREGUNTA 2:
+Cuando el texto afirma que leer no solo es pronunciar palabras, quiere decir que:
+
+A. La lectura implica comprensión e interpretación
+B. Leer es solo decir palabras en voz alta
+C. La lectura no sirve en la escuela
+D. Las palabras no tienen significado
+
+PREGUNTA 3:
+¿Cuál es una idea principal del texto?
+
+A. La lectura es una actividad completa
+B. Leer solo sirve para hablar fuerte
+C. La escuela no necesita lectura
+D. La imaginación no se relaciona con leer
+
+PREGUNTA 4:
+Una consecuencia positiva de leer es:
+
+A. Disminuir el vocabulario
+B. Comprender mejor el mundo
+C. Evitar pensar
+D. No analizar información
+
+MATERIA: Ciencias Sociales
+
+PREGUNTA 1:
+El gobierno escolar permite la participación de la comunidad educativa en las decisiones institucionales.
+
+A. Verdadero, porque promueve la participación
+B. Falso, porque elimina la democracia
+C. Verdadero, porque impide votar
+D. Falso, porque solo participa el rector
+
+PREGUNTA 2:
+El personero estudiantil representa principalmente a:
+
+A. Los docentes
+B. Los padres de familia
+C. Los estudiantes
+D. Los administrativos
+
+PREGUNTA 3:
+Una función del consejo estudiantil es:
+
+A. Elegir al rector
+B. Representar a los estudiantes
+C. Reemplazar al alcalde
+D. Administrar hospitales
+
+PREGUNTA 4:
+La democracia escolar se relaciona con:
+
+A. Participación y elección
+B. Imposición y silencio
+C. Castigo y exclusión
+D. Orden sin opinión

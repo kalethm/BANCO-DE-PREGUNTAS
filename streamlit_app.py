@@ -1,21 +1,23 @@
 import streamlit as st
 from pathlib import Path
-import shutil
 import pandas as pd
-from pdf_interactivo import generar_pdf_interactivo
-
 
 from database import (
     crear_tablas,
+    migrar_bd,
     crear_usuarios_iniciales,
     validar_usuario,
     guardar_pregunta,
     listar_preguntas,
     obtener_grados,
-    obtener_materias
+    obtener_materias,
+    registrar_archivo,
+    listar_archivos_subidos,
+    eliminar_preguntas_por_ids,
+    eliminar_archivos_por_ids
 )
 from parser_preguntas import extraer_texto, parsear_preguntas
-from pdf_generator import generar_pdf
+from pdf_generator import generar_pdf_formato
 from export_android import exportar_json_android
 
 st.set_page_config(
@@ -25,10 +27,12 @@ st.set_page_config(
 )
 
 crear_tablas()
+migrar_bd()
 crear_usuarios_iniciales()
 
 Path("data/uploads").mkdir(parents=True, exist_ok=True)
 Path("data/images").mkdir(parents=True, exist_ok=True)
+Path("data/pdf").mkdir(parents=True, exist_ok=True)
 
 def login():
     st.title("📚 Banco de Preguntas Institucional")
@@ -54,26 +58,45 @@ def cerrar_sesion():
 
 def vista_profesor():
     st.title("👨‍🏫 Panel del Profesor")
-    st.write(f"Bienvenido, **{st.session_state['usuario']}**")
+    st.write(f"Usuario: **{st.session_state['usuario']}**")
 
-    st.info("""
-    Formato esperado:
+    profesor_nombre = st.text_input(
+        "Nombre completo del profesor",
+        placeholder="Ejemplo: Enrique Rhenals Bello"
+    )
 
-    GRADO: 6  
-    MATERIA: Ciencias Sociales  
+    st.warning("El nombre completo del profesor es obligatorio para guardar preguntas.")
 
-    PREGUNTA 1:  
-    Texto de la pregunta...  
+    with st.expander("Ver formato aceptado"):
+        st.code("""GRADO: 8
+MATERIA: Ciencias Sociales
 
-    IMAGEN: pregunta1.png  
+TEXTO BASE 1:
+Aquí va un texto base si se necesita.
+FIN TEXTO BASE
 
-    A. Opción A  
-    B. Opción B  
-    C. Opción C  
-    D. Opción D
-    """)
+PREGUNTA 1:
+Texto de la pregunta.
 
-    archivo = st.file_uploader("Suba el archivo Word o TXT con las preguntas", type=["docx", "txt"])
+IMAGEN: pregunta1.png
+
+A. Opción A
+B. Opción B
+C. Opción C
+D. Opción D
+
+PREGUNTA 2:
+Texto de otra pregunta.
+
+A. Opción A
+B. Opción B
+C. Opción C
+D. Opción D""", language="text")
+
+    archivo = st.file_uploader(
+        "Suba el archivo Word o TXT con las preguntas",
+        type=["docx", "txt"]
+    )
 
     imagenes = st.file_uploader(
         "Suba las imágenes de las preguntas, si aplica",
@@ -82,18 +105,39 @@ def vista_profesor():
     )
 
     if st.button("Procesar y guardar preguntas"):
+        if not profesor_nombre.strip():
+            st.error("Debe ingresar el nombre completo del profesor.")
+            return
+
         if not archivo:
             st.warning("Debe subir un archivo Word o TXT.")
             return
 
-        ruta_archivo = Path("data/uploads") / archivo.name
+        nombre_doc = archivo.name.lower().replace(" ", "_")
+        ruta_archivo = Path("data/uploads") / nombre_doc
+
         with open(ruta_archivo, "wb") as f:
             f.write(archivo.getbuffer())
 
+        registrar_archivo(
+            nombre_archivo=nombre_doc,
+            tipo="documento",
+            profesor_usuario=st.session_state["usuario"],
+            profesor_nombre=profesor_nombre.strip()
+        )
+
         for img in imagenes:
-            ruta_img = Path("data/images") / img.name.lower()
+            nombre_img = img.name.lower().replace(" ", "_")
+            ruta_img = Path("data/images") / nombre_img
             with open(ruta_img, "wb") as f:
                 f.write(img.getbuffer())
+
+            registrar_archivo(
+                nombre_archivo=nombre_img,
+                tipo="imagen",
+                profesor_usuario=st.session_state["usuario"],
+                profesor_nombre=profesor_nombre.strip()
+            )
 
         try:
             texto = extraer_texto(ruta_archivo)
@@ -101,8 +145,10 @@ def vista_profesor():
 
             for p in preguntas:
                 if p.get("imagen"):
-                    p["imagen"] = p["imagen"].lower()
+                    p["imagen"] = p["imagen"].lower().replace(" ", "_")
                 p["profesor"] = st.session_state["usuario"]
+                p["profesor_nombre"] = profesor_nombre.strip()
+                p["archivo_origen"] = nombre_doc
                 guardar_pregunta(p)
 
             st.success(f"Se guardaron {len(preguntas)} preguntas correctamente.")
@@ -110,6 +156,8 @@ def vista_profesor():
             with st.expander("Ver preguntas detectadas"):
                 for p in preguntas:
                     st.markdown(f"### Pregunta {p['numero']}")
+                    if p.get("texto_base"):
+                        st.info(p["texto_base"][:800])
                     st.write(p["enunciado"])
                     if p.get("imagen"):
                         st.write(f"Imagen: {p['imagen']}")
@@ -134,73 +182,149 @@ def vista_admin():
 
     st.subheader("Preguntas registradas")
 
+    ids_seleccionados = []
+
     if preguntas:
         df = pd.DataFrame([
             {
+                "Seleccionar": False,
                 "ID": p["id"],
                 "Grado": p["grado"],
                 "Materia": p["materia"],
                 "Pregunta": p["numero"],
-                "Enunciado": p["enunciado"][:80],
+                "Texto base": "Sí" if p.get("texto_base") else "No",
+                "Enunciado": p["enunciado"][:90],
                 "Imagen": p["imagen"],
-                "Profesor": p["profesor"],
+                "Profesor": p["profesor_nombre"] or p["profesor"],
+                "Archivo": p["archivo_origen"],
                 "Fecha": p["fecha"]
             }
             for p in preguntas
         ])
-        st.dataframe(df, use_container_width=True)
+
+        editado = st.data_editor(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            disabled=["ID", "Grado", "Materia", "Pregunta", "Texto base", "Enunciado", "Imagen", "Profesor", "Archivo", "Fecha"],
+            key="tabla_preguntas_admin"
+        )
+
+        ids_seleccionados = editado.loc[editado["Seleccionar"] == True, "ID"].tolist()
+
+        if st.button("🗑️ Eliminar preguntas seleccionadas"):
+            if ids_seleccionados:
+                eliminar_preguntas_por_ids([int(x) for x in ids_seleccionados])
+                st.success("Preguntas eliminadas correctamente.")
+                st.rerun()
+            else:
+                st.warning("Seleccione al menos una pregunta.")
     else:
         st.warning("No hay preguntas registradas con esos filtros.")
 
     st.divider()
 
-    st.subheader("📄 Generar PDF")
+    st.subheader("📄 Generar PDF normal con formato institucional")
 
-    nombre_pdf = st.text_input("Nombre del PDF", value="banco_preguntas.pdf")
+    nombre_pdf_normal = st.text_input(
+        "Nombre del PDF normal",
+        value="banco_preguntas_formato.pdf"
+    )
 
-    if st.button("Generar PDF"):
+    if st.button("Generar PDF normal"):
         if not preguntas:
             st.error("No hay preguntas para generar PDF.")
         else:
-            ruta_pdf = generar_pdf(preguntas, nombre_pdf)
-            st.success("PDF generado correctamente.")
+            ruta_pdf = generar_pdf_formato(
+                preguntas=preguntas,
+                nombre_pdf=nombre_pdf_normal,
+                interactivo=False,
+                titulo="EXÁMENES FINALES",
+                subtitulo="PRIMER PERIODO",
+                institucion="INSTITUCIÓN EDUCATIVA LAS FLORES",
+                grado_texto=f"{grado}°" if grado != "Todos" else "GRADO",
+                sesion="PRIMERA SESIÓN"
+            )
+            st.success("PDF normal generado correctamente.")
             with open(ruta_pdf, "rb") as f:
                 st.download_button(
-                    "Descargar PDF",
+                    "Descargar PDF normal",
                     data=f,
-                    file_name=nombre_pdf,
+                    file_name=nombre_pdf_normal,
                     mime="application/pdf"
                 )
 
     st.divider()
-    st.subheader("📘 Generar PDF interactivo")
+
+    st.subheader("📘 Generar PDF interactivo con formato institucional")
 
     nombre_pdf_interactivo = st.text_input(
-    "Nombre del PDF interactivo",
-    value="preguntas_interactivas.pdf"
+        "Nombre del PDF interactivo",
+        value="banco_preguntas_interactivo.pdf"
     )
 
     if st.button("Generar PDF interactivo"):
         if not preguntas:
             st.error("No hay preguntas para generar PDF interactivo.")
         else:
-            ruta_pdf_interactivo = generar_pdf_interactivo(
-            preguntas,
-            nombre_pdf_interactivo
+            ruta_pdf = generar_pdf_formato(
+                preguntas=preguntas,
+                nombre_pdf=nombre_pdf_interactivo,
+                interactivo=True,
+                titulo="EXÁMENES FINALES",
+                subtitulo="PRIMER PERIODO",
+                institucion="INSTITUCIÓN EDUCATIVA LAS FLORES",
+                grado_texto=f"{grado}°" if grado != "Todos" else "GRADO",
+                sesion="PRIMERA SESIÓN"
+            )
+            st.success("PDF interactivo generado correctamente.")
+            with open(ruta_pdf, "rb") as f:
+                st.download_button(
+                    "Descargar PDF interactivo",
+                    data=f,
+                    file_name=nombre_pdf_interactivo,
+                    mime="application/pdf"
+                )
+
+    st.divider()
+
+
+    st.subheader("🗂️ Archivos subidos")
+
+    archivos = listar_archivos_subidos()
+
+    if archivos:
+        df_archivos = pd.DataFrame([
+            {
+                "Seleccionar": False,
+                "ID": a["id"],
+                "Archivo": a["nombre_archivo"],
+                "Tipo": a["tipo"],
+                "Profesor": a["profesor_nombre"] or a["profesor_usuario"],
+                "Fecha": a["fecha"]
+            }
+            for a in archivos
+        ])
+
+        edit_archivos = st.data_editor(
+            df_archivos,
+            use_container_width=True,
+            hide_index=True,
+            disabled=["ID", "Archivo", "Tipo", "Profesor", "Fecha"],
+            key="tabla_archivos_admin"
         )
 
-        st.success("PDF interactivo generado correctamente.")
+        ids_archivos = edit_archivos.loc[edit_archivos["Seleccionar"] == True, "ID"].tolist()
 
-        with open(ruta_pdf_interactivo, "rb") as f:
-            st.download_button(
-                "Descargar PDF interactivo",
-                data=f,
-                file_name=nombre_pdf_interactivo,
-                mime="application/pdf"
-            )
-    
-
-    
+        if st.button("🗑️ Eliminar archivos seleccionados"):
+            if ids_archivos:
+                eliminar_archivos_por_ids([int(x) for x in ids_archivos])
+                st.success("Archivos eliminados correctamente.")
+                st.rerun()
+            else:
+                st.warning("Seleccione al menos un archivo.")
+    else:
+        st.info("No hay archivos subidos registrados.")
 
 def main():
     if "usuario" not in st.session_state:

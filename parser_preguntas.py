@@ -11,7 +11,10 @@ def leer_docx(ruta):
     return "\n".join(textos)
 
 def leer_txt(ruta):
-    return Path(ruta).read_text(encoding="utf-8")
+    try:
+        return Path(ruta).read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return Path(ruta).read_text(encoding="latin-1")
 
 def extraer_texto(ruta):
     ruta = Path(ruta)
@@ -21,6 +24,9 @@ def extraer_texto(ruta):
         return leer_txt(ruta)
     else:
         raise ValueError("Solo se permiten archivos .docx o .txt")
+
+def limpiar_opcion(texto):
+    return texto.strip().replace("\n", " ")
 
 def parsear_preguntas(texto):
     grado_match = re.search(r"GRADO:\s*(.+)", texto, re.IGNORECASE)
@@ -34,61 +40,86 @@ def parsear_preguntas(texto):
     grado = grado_match.group(1).strip()
     materia = materia_match.group(1).strip()
 
-    bloques = re.split(r"\n\s*PREGUNTA\s+(\d+)\s*:\s*", texto, flags=re.IGNORECASE)
+    cuerpo_inicio = max(grado_match.end(), materia_match.end())
+    cuerpo = texto[cuerpo_inicio:].strip()
+
+    patron = re.compile(
+        r"(TEXTO\s+BASE\s+\d+\s*:|PREGUNTA\s+\d+\s*:)",
+        re.IGNORECASE
+    )
+
+    matches = list(patron.finditer(cuerpo))
+
+    if not matches:
+        raise ValueError("No se encontraron preguntas. Revise que usen PREGUNTA 1:, PREGUNTA 2:, etc.")
 
     preguntas = []
+    texto_base_actual = None
 
-    # bloques[0] contiene encabezado, luego vienen pares: numero, contenido
-    for i in range(1, len(bloques), 2):
-        numero = int(bloques[i])
-        contenido = bloques[i + 1].strip()
+    for idx, match in enumerate(matches):
+        etiqueta = match.group(1)
+        inicio_contenido = match.end()
+        fin_contenido = matches[idx + 1].start() if idx + 1 < len(matches) else len(cuerpo)
+        contenido = cuerpo[inicio_contenido:fin_contenido].strip()
+
+        if re.match(r"TEXTO\s+BASE\s+\d+\s*:", etiqueta, re.IGNORECASE):
+            fin_match = re.search(r"FIN\s+TEXTO\s+BASE", contenido, re.IGNORECASE)
+            if not fin_match:
+                raise ValueError("Encontré TEXTO BASE, pero falta cerrar con FIN TEXTO BASE.")
+            texto_base_actual = contenido[:fin_match.start()].strip()
+            continue
+
+        pregunta_num_match = re.search(r"PREGUNTA\s+(\d+)", etiqueta, re.IGNORECASE)
+        numero = int(pregunta_num_match.group(1))
 
         imagen = None
         imagen_match = re.search(r"IMAGEN:\s*(.+)", contenido, re.IGNORECASE)
         if imagen_match:
             imagen = imagen_match.group(1).strip()
 
-        opcion_a = re.search(r"\n?A\.\s*(.+)", contenido, re.IGNORECASE)
-        opcion_b = re.search(r"\n?B\.\s*(.+)", contenido, re.IGNORECASE)
-        opcion_c = re.search(r"\n?C\.\s*(.+)", contenido, re.IGNORECASE)
-        opcion_d = re.search(r"\n?D\.\s*(.+)", contenido, re.IGNORECASE)
+        opciones_match = re.search(
+            r"A\.\s*(.*?)\s*B\.\s*(.*?)\s*C\.\s*(.*?)\s*D\.\s*(.*)",
+            contenido,
+            re.IGNORECASE | re.DOTALL
+        )
 
-        if not all([opcion_a, opcion_b, opcion_c, opcion_d]):
-            raise ValueError(f"La pregunta {numero} no tiene las opciones A, B, C y D completas.")
+        if not opciones_match:
+            raise ValueError(f"La pregunta {numero} no tiene las opciones A, B, C y D completas o en orden.")
 
-        # El enunciado es lo que está antes de IMAGEN o antes de la opción A
-        corte = None
-        posiciones = []
+        opcion_a = limpiar_opcion(opciones_match.group(1))
+        opcion_b = limpiar_opcion(opciones_match.group(2))
+        opcion_c = limpiar_opcion(opciones_match.group(3))
+        opcion_d = limpiar_opcion(opciones_match.group(4))
 
-        img_pos = re.search(r"\n?IMAGEN:", contenido, re.IGNORECASE)
-        a_pos = re.search(r"\n?A\.", contenido, re.IGNORECASE)
+        corte_opciones = opciones_match.start()
 
+        contenido_antes_opciones = contenido[:corte_opciones].strip()
+
+        img_pos = re.search(r"IMAGEN:", contenido_antes_opciones, re.IGNORECASE)
         if img_pos:
-            posiciones.append(img_pos.start())
-        if a_pos:
-            posiciones.append(a_pos.start())
-
-        if posiciones:
-            corte = min(posiciones)
-            enunciado = contenido[:corte].strip()
+            enunciado = contenido_antes_opciones[:img_pos.start()].strip()
         else:
-            enunciado = contenido.strip()
+            enunciado = contenido_antes_opciones.strip()
+
+        if not enunciado:
+            raise ValueError(f"La pregunta {numero} no tiene enunciado.")
 
         preguntas.append({
             "grado": grado,
             "materia": materia,
             "numero": numero,
             "enunciado": enunciado,
+            "texto_base": texto_base_actual,
             "imagen": imagen,
             "opciones": {
-                "A": opcion_a.group(1).strip(),
-                "B": opcion_b.group(1).strip(),
-                "C": opcion_c.group(1).strip(),
-                "D": opcion_d.group(1).strip(),
+                "A": opcion_a,
+                "B": opcion_b,
+                "C": opcion_c,
+                "D": opcion_d,
             }
         })
 
     if not preguntas:
-        raise ValueError("No se encontraron preguntas. Revise que usen PREGUNTA 1:, PREGUNTA 2:, etc.")
+        raise ValueError("No se encontraron preguntas válidas.")
 
     return preguntas
