@@ -132,12 +132,17 @@ def _draw_cover(
     c.drawString(62, alto - 68, "Resolución De Reconocimiento Oficial No 001271 de 21 de noviembre de 2014")
     c.drawString(62, alto - 80, "DANE No 223586000208 NIT No 900021917-1 Código ICFES No 160333")
 
+
+
+
     # Títulos principales
     c.setFont("Helvetica-Bold", 25)
     c.drawCentredString(ancho / 2, alto - 130, "EXÁMENES FINALES")
 
     c.setFont("Helvetica-Bold", 25)
     c.drawCentredString(ancho / 2, alto - 168, periodo.upper())
+
+
 
     # Texto "Mi meta es la excelencia"
     c.setFont("Helvetica-Bold", 22)
@@ -161,9 +166,13 @@ def _draw_cover(
     c.setStrokeColorRGB(*negro)
     c.setLineWidth(1)
 
+
+  
     # Grado grande
     c.setFont("Helvetica-Bold", 24)
     c.drawString(ancho - 375, alto - 515, "GRADO: "+ str(grado_texto))
+
+
 
     # Sesión
     c.setFont("Helvetica-Bold", 18)
@@ -220,6 +229,8 @@ def _draw_cover(
         c.drawString(350, y2, f"• {item}")
         y2 -= 16
 
+   
+
 
 def _draw_header_normal(c, page_num, materia, grado_texto):
     ancho, alto = letter
@@ -248,7 +259,6 @@ def _draw_header_interactivo(c, i, total, materia, grado_texto):
     c.drawRightString(ancho - margen_x, alto - 25, materia.upper())
     c.line(margen_x, alto - 32, ancho - margen_x, alto - 32)
 
-
 def generar_pdf_normal_compacto(
     preguntas,
     nombre_pdf="banco_preguntas_normal.pdf",
@@ -271,64 +281,48 @@ def generar_pdf_normal_compacto(
     gap_col = 18
     col_w = (ancho - (2 * margen_x) - gap_col) / 2
 
-    def dibujar_texto_base_ancho_completo(texto_base, y_actual):
-        """Dibuja el texto base ocupando TODO el ancho de la página"""
-        if not texto_base:
-            return y_actual
-        
-        ancho_texto = ancho - (2 * margen_x)
-        
-        # Calcular cuántas líneas tiene el texto base
-        lineas = _wrap_text(texto_base, ancho_texto - 20, "Helvetica", 10)
-        alto_texto = len(lineas) * 12 + 35
-        
-        # Limitar altura máxima
-        alto_texto = min(alto_texto, 200)
-        
-        # Fondo gris
-        c.setFillColorRGB(0.94, 0.94, 0.94)
-        c.roundRect(margen_x, y_actual - alto_texto, ancho_texto, alto_texto, 6, fill=1, stroke=0)
-        
-        # Título
-        c.setFillColorRGB(0, 0, 0)
-        c.setFont("Helvetica-Bold", 11)
-        c.drawString(margen_x + 8, y_actual - 12, "TEXTO BASE")
-        
-        # Dibujar líneas de texto
-        c.setFont("Helvetica", 10)
-        yy = y_actual - 28
-        for linea in lineas:
-            if yy < y_actual - alto_texto + 8:
-                break
-            c.drawString(margen_x + 8, yy, linea)
-            yy -= 12
-        
-        return y_actual - alto_texto - 10
+    def estimate_height(p):
+        h = 15  # ← Aumentado
 
-    def estimar_altura_pregunta(p):
-        """Estima la altura que ocupará UNA pregunta"""
-        h = 15
-        
-        # Enunciado
-        h += 12 * len(_wrap_text(p["enunciado"], col_w - 18, "Helvetica", 11))
-        
-        # Imagen
+        if p.get("texto_base"):
+            h += min(
+                95,  # ← Aumentado para texto más grande
+                18 + 11 * len(_wrap_text(p["texto_base"], col_w - 12, "Helvetica", 10)),  # ← Fuente 10pt
+            )
+
+        h += 12 * len(_wrap_text(p["enunciado"], col_w - 18, "Helvetica", 11))  # ← 11pt
+
         if p.get("imagen"):
             h += 115
-        
-        # Opciones
+
         for letra, opcion in p["opciones"].items():
-            h += 12 * len(_wrap_text(f"{letra}. {opcion}", col_w - 18, "Helvetica", 10)) + 3
-        
-        return max(h + 12, 140)
+            h += 12 * len(  # ← Aumentado
+                _wrap_text(f"{letra}. {opcion}", col_w - 18, "Helvetica", 10)  # ← 10pt
+            ) + 3
 
-    def dibujar_pregunta(p, x, y):
-        """Dibuja una pregunta en una columna"""
-        c.setFont("Helvetica-Bold", 12)
+        return max(h + 12, 140)  # ← Altura mínima aumentada
+
+    def draw_question(p, x, y):
+        c.setFont("Helvetica-Bold", 12)  # ← 10 → 12pt
         c.drawString(x, y, f"{p['numero']}.")
-        y -= 14
+        y -= 14  # ← Espaciado aumentado
 
-        # Enunciado
+        if p.get("texto_base"):
+            c.setFillColorRGB(0.94, 0.94, 0.94)
+            box_h = 80  # ← Aumentado para texto más grande
+            c.roundRect(x, y - box_h + 4, col_w, box_h, 4, fill=1, stroke=0)
+            c.setFillColorRGB(0, 0, 0)
+            c.setFont("Helvetica-Bold", 10)  # ← 8.5 → 10pt
+            c.drawString(x + 4, y - 10, "TEXTO BASE")
+
+            yy = y - 22
+            for line in _wrap_text(p["texto_base"], col_w - 8, "Helvetica", 9.5)[:7]:  # ← 9.5pt
+                c.setFont("Helvetica", 9.5)  # ← 8.2 → 9.5pt
+                c.drawString(x + 4, yy, line)
+                yy -= 11  # ← Líneas más separadas
+
+            y -= box_h + 8
+
         y = _draw_wrapped(
             c,
             p["enunciado"],
@@ -336,14 +330,14 @@ def generar_pdf_normal_compacto(
             y,
             col_w - 16,
             "Helvetica",
-            11,
-            13,
+            11,  # ← 9.5 → 11pt (¡MUCHO MÁS GRANDE!)
+            13,  # ← Leading aumentado
         )
         y -= 5
 
-        # Imagen
         if p.get("imagen"):
             img_path = Path("data/images") / str(p["imagen"])
+
             if img_path.exists():
                 try:
                     img = ImageReader(str(img_path))
@@ -353,7 +347,9 @@ def generar_pdf_normal_compacto(
                     scale = min(max_w / iw, max_h / ih)
                     img_w = iw * scale
                     img_h = ih * scale
+
                     img_x = x + (col_w - img_w) / 2
+                    
                     c.drawImage(
                         img,
                         img_x,
@@ -372,11 +368,10 @@ def generar_pdf_normal_compacto(
                         y,
                         col_w - 18,
                         "Helvetica",
-                        9,
+                        9,  # ← Aumentado
                         11,
                     )
 
-        # Opciones
         for letra in sorted(p["opciones"].keys()):
             y = _draw_wrapped(
                 c,
@@ -385,14 +380,14 @@ def generar_pdf_normal_compacto(
                 y,
                 col_w - 18,
                 "Helvetica",
-                10,
-                12,
+                10,  # ← 8.8 → 10pt (¡MUCHO MÁS LEGIBLE!)
+                12,  # ← Leading aumentado
             )
             y -= 3
 
         return y - 10
 
-    # ========== PORTADA ==========
+    # Portada
     _draw_cover(
         c,
         preguntas,
@@ -404,93 +399,53 @@ def generar_pdf_normal_compacto(
     )
     c.showPage()
 
-    # ========== AGRUPAR POR MATERIA Y TEXTO BASE ==========
-    # Primero, ordenar preguntas por número
-    preguntas_ordenadas = sorted(preguntas, key=lambda x: x["numero"])
-    
-    # Agrupar por texto base (preguntas consecutivas que comparten texto base)
-    grupos = []
-    grupo_actual = []
-    texto_actual = None
-    
-    for p in preguntas_ordenadas:
-        texto_p = p.get("texto_base", "")
-        if texto_p != texto_actual:
-            if grupo_actual:
-                grupos.append({
-                    "texto_base": texto_actual,
-                    "preguntas": grupo_actual
-                })
-            grupo_actual = [p]
-            texto_actual = texto_p
-        else:
-            grupo_actual.append(p)
-    
-    if grupo_actual:
-        grupos.append({
-            "texto_base": texto_actual,
-            "preguntas": grupo_actual
-        })
-    
+    # Agrupar por materia conservando orden
+    materias_orden = []
+    por_materia = defaultdict(list)
+
+    for p in preguntas:
+        if p["materia"] not in por_materia:
+            materias_orden.append(p["materia"])
+        por_materia[p["materia"]].append(p)
+
     page_num = 2
-    
-    for grupo in grupos:
-        if not grupo["preguntas"]:
-            continue
-        
-        materia = grupo["preguntas"][0]["materia"]
-        
-        # Encabezado de página
+
+    for materia in materias_orden:
         _draw_header_normal(c, page_num, materia, grado_texto)
-        
-        # Título de materia
-        c.setFont("Helvetica-Bold", 16)
+
+        c.setFont("Helvetica-Bold", 16)  # ← 14 → 16pt
         c.drawCentredString(ancho / 2, alto - 45, materia.upper())
-        
-        y_actual = alto - 90
-        
-        # Dibujar texto base si existe
-        if grupo["texto_base"]:
-            y_actual = dibujar_texto_base_ancho_completo(grupo["texto_base"], y_actual)
-            y_actual -= 15
-        
-        # Configurar columnas
+
         col = 0
-        y_positions = [y_actual, y_actual]
+        y_positions = [alto - 90, alto - 90]  # ← Más espacio inicial
         x_positions = [margen_x, margen_x + col_w + gap_col]
-        
-        # Dibujar preguntas del grupo en columnas
-        for p in grupo["preguntas"]:
-            altura_necesaria = estimar_altura_pregunta(p)
-            
-            # Verificar si cabe en la columna actual
-            if y_positions[col] - altura_necesaria < bottom_y:
+
+        for p in por_materia[materia]:
+            needed = estimate_height(p)
+
+            if y_positions[col] - needed < bottom_y:
                 if col == 0:
                     col = 1
                 else:
-                    # Nueva página
                     c.showPage()
                     page_num += 1
                     _draw_header_normal(c, page_num, materia, grado_texto)
                     c.setFont("Helvetica-Bold", 16)
                     c.drawCentredString(ancho / 2, alto - 45, materia.upper())
-                    
-                    # Reiniciar columnas
                     col = 0
                     y_positions = [alto - 90, alto - 90]
-                    
-                    # Redibujar texto base si es necesario
-                    if grupo["texto_base"]:
-                        y_positions[0] = dibujar_texto_base_ancho_completo(grupo["texto_base"], y_positions[0])
-                        y_positions[0] -= 15
-                        y_positions[1] = y_positions[0]
-            
-            # Dibujar la pregunta
-            y_positions[col] = dibujar_pregunta(p, x_positions[col], y_positions[col])
-            
-            # Alternar columna
-            col = 1 - col
-        
+
+            if y_positions[col] - needed < bottom_y and col == 1:
+                c.showPage()
+                page_num += 1
+                _draw_header_normal(c, page_num, materia, grado_texto)
+                c.setFont("Helvetica-Bold", 16)
+                c.drawCentredString(ancho / 2, alto - 45, materia.upper())
+                col = 0
+                y_positions = [alto - 90, alto - 90]
+
+            y_positions[col] = draw_question(p, x_positions[col], y_positions[col])
+
         c.showPage()
         page_num += 1
 
@@ -548,31 +503,31 @@ def generar_pdf_interactivo_una_pregunta(
 
         if p.get("texto_base"):
             c.setFillColorRGB(0.94, 0.94, 0.94)
-            lineas = _wrap_text(p["texto_base"], ancho - 2 * margen_x - 20, "Helvetica", 11)
-            alto_texto = min(len(lineas) * 14 + 40, 200)
-            
             c.roundRect(
                 margen_x,
-                y - alto_texto,
+                y - 160,
                 ancho - 2 * margen_x,
-                alto_texto,
+                145,
                 8,
                 fill=1,
                 stroke=0,
             )
             c.setFillColorRGB(0, 0, 0)
-            c.setFont("Helvetica-Bold", 12)
-            c.drawString(margen_x + 10, y - 25, "TEXTO BASE")
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(margen_x + 10, y - 28, "TEXTO BASE")
 
-            yy = y - 45
-            c.setFont("Helvetica", 11)
-            for linea in lineas[:10]:
-                if yy < y - alto_texto + 10:
-                    break
-                c.drawString(margen_x + 10, yy, linea)
-                yy -= 14
+            yy = y - 50
+            for line in _wrap_text(
+                p["texto_base"],
+                ancho - 2 * margen_x - 20,
+                "Helvetica",
+                12,
+            )[:9]:
+                c.setFont("Helvetica", 12)
+                c.drawString(margen_x + 10, yy, line)
+                yy -= 15
 
-            y -= alto_texto + 15
+            y -= 170
 
         y = _draw_wrapped(
             c,
@@ -581,8 +536,8 @@ def generar_pdf_interactivo_una_pregunta(
             y,
             ancho - 2 * margen_x,
             "Helvetica",
-            15,
-            19,
+            16,
+            20,
         )
         y -= 15
 
@@ -593,24 +548,25 @@ def generar_pdf_interactivo_una_pregunta(
                 try:
                     img = ImageReader(str(img_path))
                     iw, ih = img.getSize()
-                    max_w = ancho - 2 * margen_x - 20
-                    max_h = 380
+                    max_w = ancho - 2 * margen_x - 20  # ← Margen reducido
+                    max_h = 380  # ← AUMENTADO A 380px (¡GIGANTE!)
                     scale = min(max_w / iw, max_h / ih)
                     img_w = iw * scale
                     img_h = ih * scale
 
-                    img_x = margen_x + (ancho - 2 * margen_x - img_w) / 2
+                    # 🎯 CENTRADO PERFECTAMENTE
+                    img_x = margen_x + (ancho - 2 * margen_x - img_w) / 2  # ← Centrado horizontal
                     
                     c.drawImage(
                         img,
-                        img_x,
+                        img_x,  # ← Posición centrada
                         y - img_h,
                         width=img_w,
                         height=img_h,
                         preserveAspectRatio=True,
                         mask="auto",
                     )
-                    y -= img_h + 30
+                    y -= img_h + 30  # ← Más espacio después
                 except Exception:
                     y = _draw_wrapped(
                         c,
@@ -631,8 +587,8 @@ def generar_pdf_interactivo_una_pregunta(
                 y,
                 ancho - 2 * margen_x - 18,
                 "Helvetica",
-                14,
-                18,
+                15,
+                19,
             )
             y -= 8
 
