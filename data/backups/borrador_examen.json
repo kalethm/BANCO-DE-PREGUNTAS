@@ -1,0 +1,329 @@
+{
+  "preguntas_form": {
+    "1": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "2": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "3": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "4": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "5": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "6": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "7": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "8": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "9": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "10": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "11": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "12": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "13": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "14": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "15": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "16": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "17": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "18": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "19": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    },
+    "20": {
+      "texto_base": "",
+      "enunciado": "",
+      "cantidad_opciones": 4,
+      "opciones": {
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
+        "E": "",
+        "F": "",
+        "G": "",
+        "H": ""
+      },
+      "imagen_nombre": null
+    }
+  },
+  "profesor_nombre_form": "pedro",
+  "grado_form": "6",
+  "materia_form": "INGLES",
+  "pregunta_actual": 1,
+  "fecha_guardado": "2026-05-04T17:25:43.034797"
+}
