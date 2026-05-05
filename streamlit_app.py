@@ -15,6 +15,7 @@ from database import (
     obtener_grados,
     obtener_materias,
     eliminar_preguntas_por_ids,
+    obtener_profesores,
 )
 from pdf_generator import generar_pdf_normal_compacto, generar_pdf_interactivo_una_pregunta
 
@@ -48,10 +49,15 @@ MATERIAS = [
 LETRAS = list("ABCDEFGH")
 TOTAL_PREGUNTAS = 20
 
-BACKUP_FILE = Path("data/backups/borrador_examen.json")
+def get_backup_file(usuario):
+    """Obtiene la ruta del archivo de borrador para un usuario específico"""
+    return Path(f"data/backups/borrador_{usuario}.json")
 
 def guardar_borrador():
+    """Guarda el progreso actual del usuario en un archivo local"""
     if "preguntas_form" in st.session_state and st.session_state["preguntas_form"]:
+        if "usuario" not in st.session_state:
+            return False
         try:
             preguntas_form_serializable = {}
             for k, v in st.session_state["preguntas_form"].items():
@@ -65,7 +71,8 @@ def guardar_borrador():
                 "pregunta_actual": st.session_state.get("pregunta_actual", 1),
                 "fecha_guardado": datetime.now().isoformat()
             }
-            with open(BACKUP_FILE, "w", encoding="utf-8") as f:
+            backup_file = get_backup_file(st.session_state["usuario"])
+            with open(backup_file, "w", encoding="utf-8") as f:
                 json.dump(borrador, f, indent=2, ensure_ascii=False)
             return True
         except Exception as e:
@@ -73,9 +80,13 @@ def guardar_borrador():
     return False
 
 def cargar_borrador():
-    if BACKUP_FILE.exists():
+    """Carga el progreso guardado del usuario actual"""
+    if "usuario" not in st.session_state:
+        return None
+    backup_file = get_backup_file(st.session_state["usuario"])
+    if backup_file.exists():
         try:
-            with open(BACKUP_FILE, "r", encoding="utf-8") as f:
+            with open(backup_file, "r", encoding="utf-8") as f:
                 borrador = json.load(f)
             if "preguntas_form" in borrador:
                 preguntas_form = {}
@@ -88,20 +99,26 @@ def cargar_borrador():
     return None
 
 def eliminar_borrador():
-    if BACKUP_FILE.exists():
-        BACKUP_FILE.unlink()
+    """Elimina el archivo de borrador del usuario actual"""
+    if "usuario" in st.session_state:
+        backup_file = get_backup_file(st.session_state["usuario"])
+        if backup_file.exists():
+            backup_file.unlink()
 
 def login():
     st.title("📚 Banco de Preguntas Institucional")
     st.subheader("Inicio de sesión")
+    
     usuario = st.text_input("Usuario")
     clave = st.text_input("Contraseña", type="password")
+    
     if st.button("Ingresar"):
         data = validar_usuario(usuario, clave)
         if data:
             st.session_state["usuario"] = data[0]
             st.session_state["rol"] = data[1]
-            st.success("Ingreso exitoso")
+            st.session_state["nombre_completo"] = data[2] if data[2] else data[0]
+            st.success(f"Bienvenido {st.session_state['nombre_completo']}")
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -122,6 +139,7 @@ def crear_estructura_pregunta():
     }
 
 def inicializar_banco_temporal():
+    """Inicializa el banco de preguntas para el usuario actual"""
     if "preguntas_form" in st.session_state and st.session_state["preguntas_form"]:
         if len(st.session_state["preguntas_form"]) == TOTAL_PREGUNTAS:
             return
@@ -131,13 +149,14 @@ def inicializar_banco_temporal():
     if borrador and "preguntas_form" in borrador:
         if len(borrador["preguntas_form"]) == TOTAL_PREGUNTAS:
             st.session_state["preguntas_form"] = borrador["preguntas_form"]
-            st.session_state["profesor_nombre_form"] = borrador.get("profesor_nombre_form", "")
+            st.session_state["profesor_nombre_form"] = borrador.get("profesor_nombre_form", st.session_state.get("nombre_completo", ""))
             st.session_state["grado_form"] = borrador.get("grado_form", GRADOS[0])
             st.session_state["materia_form"] = borrador.get("materia_form", MATERIAS[0])
             st.session_state["pregunta_actual"] = borrador.get("pregunta_actual", 1)
-            st.info("📀 Se recuperó el progreso guardado")
+            st.info("📀 Se recuperó su progreso guardado")
             return
     
+    # Crear nuevo banco
     preguntas_form = {}
     for n in range(1, TOTAL_PREGUNTAS + 1):
         preguntas_form[n] = crear_estructura_pregunta()
@@ -145,18 +164,18 @@ def inicializar_banco_temporal():
     st.session_state["preguntas_form"] = preguntas_form
     if "pregunta_actual" not in st.session_state:
         st.session_state["pregunta_actual"] = 1
-    if "profesor_nombre_form" not in st.session_state:
-        st.session_state["profesor_nombre_form"] = ""
+    # El nombre del profesor se carga automáticamente desde la sesión
+    st.session_state["profesor_nombre_form"] = st.session_state.get("nombre_completo", "")
     if "grado_form" not in st.session_state:
         st.session_state["grado_form"] = GRADOS[0]
     if "materia_form" not in st.session_state:
         st.session_state["materia_form"] = MATERIAS[0]
 
-def guardar_imagen(imagen_file, numero):
+def guardar_imagen(imagen_file, numero, usuario):
     if not imagen_file:
         return None
     nombre_limpio = imagen_file.name.lower().replace(" ", "_")
-    nombre_final = f"pregunta_{numero}_{uuid4().hex}_{nombre_limpio}"
+    nombre_final = f"{usuario}_pregunta_{numero}_{uuid4().hex}_{nombre_limpio}"
     ruta = Path("data/images") / nombre_final
     with open(ruta, "wb") as f:
         f.write(imagen_file.getbuffer())
@@ -173,7 +192,7 @@ def validar_pregunta(datos, numero):
             errores.append(f"Pregunta {numero}: falta la opción {letra}.")
     return errores
 
-def construir_preguntas_para_guardar(profesor_nombre, grado, materia):
+def construir_preguntas_para_guardar(profesor_nombre, grado, materia, usuario):
     lote_id = uuid4().hex
     preguntas = []
     errores = []
@@ -193,7 +212,7 @@ def construir_preguntas_para_guardar(profesor_nombre, grado, materia):
             "texto_base": datos.get("texto_base", "").strip() if datos.get("texto_base", "").strip() else None,
             "imagen": datos.get("imagen_nombre"),
             "opciones": opciones,
-            "profesor_usuario": st.session_state["usuario"],
+            "profesor_usuario": usuario,
             "profesor_nombre": profesor_nombre.strip(),
             "lote_id": lote_id,
         })
@@ -229,10 +248,13 @@ def limpiar_banco_temporal():
     for n in range(1, TOTAL_PREGUNTAS + 1):
         preguntas_form[n] = crear_estructura_pregunta()
     st.session_state["preguntas_form"] = preguntas_form
+    st.session_state["profesor_nombre_form"] = st.session_state.get("nombre_completo", "")
 
 def vista_profesor():
     inicializar_banco_temporal()
+    
     st.title("👨‍🏫 Panel del Profesor")
+    st.write(f"Bienvenido: **{st.session_state.get('nombre_completo', st.session_state['usuario'])}**")
     st.write(f"Usuario: **{st.session_state['usuario']}**")
     
     col_save1, col_save2 = st.columns([1, 5])
@@ -241,15 +263,16 @@ def vista_profesor():
             if guardar_borrador():
                 st.success("Progreso guardado localmente")
 
-    st.subheader("Datos obligatorios del banco de preguntas")
-    col1, col2, col3 = st.columns(3)
+    st.subheader("Datos del examen")
+    
+    # El nombre del profesor ya está cargado automáticamente
+    st.info(f"👤 Profesor: {st.session_state.get('nombre_completo', st.session_state['usuario'])}")
+    
+    col1, col2 = st.columns(2)
     with col1:
-        profesor_nombre = st.text_input("Nombre completo del profesor", value=st.session_state.get("profesor_nombre_form", ""))
-        st.session_state["profesor_nombre_form"] = profesor_nombre
-    with col2:
         grado = st.selectbox("Grado", GRADOS, index=GRADOS.index(st.session_state.get("grado_form", GRADOS[0])) if st.session_state.get("grado_form", GRADOS[0]) in GRADOS else 0)
         st.session_state["grado_form"] = grado
-    with col3:
+    with col2:
         materia = st.selectbox("Materia", MATERIAS, index=MATERIAS.index(st.session_state.get("materia_form", MATERIAS[0])) if st.session_state.get("materia_form", MATERIAS[0]) in MATERIAS else 0)
         st.session_state["materia_form"] = materia
 
@@ -306,7 +329,7 @@ def vista_profesor():
     st.markdown("**🖼️ IMAGEN (Opcional)**")
     imagen = st.file_uploader("Subir imagen", type=["png", "jpg", "jpeg"], key=f"imagen_{pregunta_num}")
     if imagen:
-        nombre_img = guardar_imagen(imagen, pregunta_num)
+        nombre_img = guardar_imagen(imagen, pregunta_num, st.session_state["usuario"])
         st.session_state["preguntas_form"][pregunta_num]["imagen_nombre"] = nombre_img
         st.success("Imagen cargada")
     if st.session_state["preguntas_form"][pregunta_num].get("imagen_nombre"):
@@ -352,13 +375,12 @@ def vista_profesor():
     col_guardar, col_reset = st.columns(2)
     with col_guardar:
         if st.button("💾 Guardar en base de datos", type="primary", use_container_width=True):
-            profesor_nombre = st.session_state.get("profesor_nombre_form", "")
+            profesor_nombre = st.session_state.get("nombre_completo", st.session_state["usuario"])
             grado = st.session_state.get("grado_form", GRADOS[0])
             materia = st.session_state.get("materia_form", MATERIAS[0])
-            if not profesor_nombre.strip():
-                st.error("Ingrese el nombre del profesor")
-                return
-            preguntas, errores = construir_preguntas_para_guardar(profesor_nombre, grado, materia)
+            usuario = st.session_state["usuario"]
+            
+            preguntas, errores = construir_preguntas_para_guardar(profesor_nombre, grado, materia, usuario)
             if errores:
                 st.error("Revise los errores:")
                 for e in errores:
@@ -366,7 +388,7 @@ def vista_profesor():
                 return
             guardar_preguntas_lote(preguntas)
             eliminar_borrador()
-            st.success("¡Preguntas guardadas exitosamente!")
+            st.success(f"¡{len(preguntas)} preguntas guardadas exitosamente!")
             del st.session_state["preguntas_form"]
             st.session_state["pregunta_actual"] = 1
             st.rerun()
@@ -377,18 +399,37 @@ def vista_profesor():
 
 def vista_admin():
     st.title("🛠️ Panel del Administrador")
+    
     grados_bd = obtener_grados()
     materias_bd = obtener_materias()
+    profesores = obtener_profesores()  # Lista de tuplas (usuario, nombre_completo)
+    
     grados = ["Todos"] + sorted(set(GRADOS + grados_bd), key=lambda x: str(x))
     materias = ["Todas"] + sorted(set(MATERIAS + materias_bd))
-
-    col1, col2 = st.columns(2)
+    
+    # Crear lista de opciones para el selectbox de profesores
+    profesores_opciones = ["Todos"]
+    profesor_dict = {}  # Diccionario para mapear usuario -> nombre
+    for usuario, nombre in profesores:
+        profesores_opciones.append(usuario)
+        profesor_dict[usuario] = nombre
+    
+    col1, col2, col3 = st.columns(3)
     with col1:
         grado = st.selectbox("Filtrar por grado", grados)
     with col2:
         materia = st.selectbox("Filtrar por materia", materias)
+    with col3:
+        profesor_seleccionado = st.selectbox(
+            "Filtrar por profesor", 
+            profesores_opciones,
+            format_func=lambda x: x if x == "Todos" else f"{profesor_dict.get(x, x)} ({x})"
+        )
 
-    preguntas = listar_preguntas(grado, materia)
+    # Obtener preguntas según filtros
+    profesor_filtro = None if profesor_seleccionado == "Todos" else profesor_seleccionado
+    preguntas = listar_preguntas(grado, materia, profesor_filtro)
+    
     st.subheader("📋 Preguntas registradas")
     st.caption(f"Total: {len(preguntas)} preguntas")
 
@@ -405,11 +446,18 @@ def vista_admin():
                 "Opciones": ", ".join(p["opciones"].keys()),
                 "Imagen": "Sí" if p.get("imagen") else "No",
                 "Profesor": p["profesor_nombre"],
+                "Usuario": p["profesor_usuario"],
                 "Fecha": p["fecha"][:10] if p["fecha"] else ""
             }
             for p in preguntas
         ])
-        editado = st.data_editor(df, use_container_width=True, hide_index=True, disabled=["ID", "Grado", "Materia", "Número", "Texto base", "Enunciado", "Opciones", "Imagen", "Profesor", "Fecha"], column_config={"Seleccionar": st.column_config.CheckboxColumn("Seleccionar")})
+        editado = st.data_editor(
+            df, 
+            use_container_width=True, 
+            hide_index=True, 
+            disabled=["ID", "Grado", "Materia", "Número", "Texto base", "Enunciado", "Opciones", "Imagen", "Profesor", "Usuario", "Fecha"], 
+            column_config={"Seleccionar": st.column_config.CheckboxColumn("Seleccionar")}
+        )
         ids_seleccionados = editado.loc[editado["Seleccionar"] == True, "ID"].tolist()
         if st.button("🗑️ Eliminar seleccionadas"):
             if ids_seleccionados:
@@ -419,7 +467,7 @@ def vista_admin():
             else:
                 st.warning("Seleccione al menos una pregunta")
     else:
-        st.warning("No hay preguntas registradas")
+        st.warning("No hay preguntas registradas con esos filtros")
 
     st.divider()
     st.subheader("⚙️ Configuración de portada y cuadernillo")
@@ -437,7 +485,14 @@ def vista_admin():
             st.error("No hay preguntas para generar PDF")
         else:
             with st.spinner("Generando PDF normal..."):
-                ruta_pdf = generar_pdf_normal_compacto(preguntas=preguntas, nombre_pdf=nombre_pdf_normal, institucion="INSTITUCIÓN EDUCATIVA LAS FLORES", grado_texto=f"{grado}°" if grado != "Todos" else "GRADO", sesion=sesion_pdf, periodo=periodo_pdf)
+                ruta_pdf = generar_pdf_normal_compacto(
+                    preguntas=preguntas, 
+                    nombre_pdf=nombre_pdf_normal, 
+                    institucion="INSTITUCIÓN EDUCATIVA LAS FLORES", 
+                    grado_texto=f"{grado}°" if grado != "Todos" else "GRADO", 
+                    sesion=sesion_pdf, 
+                    periodo=periodo_pdf
+                )
             st.success("PDF normal generado correctamente")
             with open(ruta_pdf, "rb") as f:
                 st.download_button("Descargar PDF normal", data=f, file_name=nombre_pdf_normal, mime="application/pdf")
@@ -452,7 +507,15 @@ def vista_admin():
             st.error("No hay preguntas para generar PDF interactivo")
         else:
             with st.spinner("Generando PDF interactivo..."):
-                ruta_pdf = generar_pdf_interactivo_una_pregunta(preguntas=preguntas, nombre_pdf=nombre_pdf_interactivo, institucion="INSTITUCIÓN EDUCATIVA LAS FLORES", grado_texto=f"{grado}°" if grado != "Todos" else "GRADO", sesion=sesion_pdf, periodo=periodo_pdf, password=password_pdf.strip() if password_pdf else None)
+                ruta_pdf = generar_pdf_interactivo_una_pregunta(
+                    preguntas=preguntas, 
+                    nombre_pdf=nombre_pdf_interactivo, 
+                    institucion="INSTITUCIÓN EDUCATIVA LAS FLORES", 
+                    grado_texto=f"{grado}°" if grado != "Todos" else "GRADO", 
+                    sesion=sesion_pdf, 
+                    periodo=periodo_pdf, 
+                    password=password_pdf.strip() if password_pdf else None
+                )
             st.success("PDF interactivo generado correctamente")
             with open(ruta_pdf, "rb") as f:
                 st.download_button("Descargar PDF interactivo", data=f, file_name=nombre_pdf_interactivo, mime="application/pdf")

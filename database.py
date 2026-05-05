@@ -17,7 +17,9 @@ def crear_tablas():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         usuario TEXT UNIQUE NOT NULL,
         clave TEXT NOT NULL,
-        rol TEXT NOT NULL
+        rol TEXT NOT NULL,
+        nombre_completo TEXT,
+        documento TEXT
     )
     """)
 
@@ -31,7 +33,7 @@ def crear_tablas():
         texto_base TEXT,
         imagen TEXT,
         opciones_json TEXT NOT NULL,
-        profesor_usuario TEXT,
+        profesor_usuario TEXT NOT NULL,
         profesor_nombre TEXT NOT NULL,
         lote_id TEXT,
         fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -44,6 +46,14 @@ def crear_tablas():
 def migrar_bd():
     conn = conectar()
     cursor = conn.cursor()
+
+    cursor.execute("PRAGMA table_info(usuarios)")
+    columnas_usuarios = [c[1] for c in cursor.fetchall()]
+    
+    if "nombre_completo" not in columnas_usuarios:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN nombre_completo TEXT")
+    if "documento" not in columnas_usuarios:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN documento TEXT")
 
     cursor.execute("PRAGMA table_info(preguntas)")
     columnas = [c[1] for c in cursor.fetchall()]
@@ -68,18 +78,36 @@ def crear_usuarios_iniciales():
     cursor = conn.cursor()
 
     usuarios = [
-        ("admin", "admin123", "admin"),
-        ("profesor", "profe123", "profesor")
+        # Admin
+        ("admin", "admin123", "admin", "Administrador", "00000000"),
+        
+        # Profesores
+        ("dconeo", "profe123", "profesor", "Coneo Arrieta, Donaida Mercedes", "26006970"),
+        ("aflorez", "profe123", "profesor", "FLOREZ AGRESOTT, ANDRES FELIPE", "1003368522"),
+        ("gguerra", "profe123", "profesor", "Guerra Diaz, Gusmara Lucia", "25889369"),
+        ("yguevara", "profe123", "profesor", "Guevara Bohorquez, Yohn Jairo", "1067845560"),
+        ("amestra", "profe123", "profesor", "Mestra Suárez, Armando Rafael", "73578636"),
+        ("aordosgoitia", "profe123", "profesor", "Ordosgoitia Doria, Ada Irene", "26006019"),
+        ("cortiz", "profe123", "profesor", "ORTIZ POLO, CESAR ANDRES", "1067406604"),
+        ("lpacheco", "profe123", "profesor", "Pacheco Nuñez, Ledys Ruth", "30665168"),
+        ("rpadilla", "profe123", "profesor", "Padilla Arrazola, Reina Judith", "30660321"),
+        ("aracero", "profe123", "profesor", "RACERO FERNANDEZ, ADRIANA ISABEL", "30661106"),
+        ("ltanos", "profe123", "profesor", "TANOS ESTRELLA, LIZ SANDRA", "25786141"),
+        ("jvergara", "profe123", "profesor", "VERGARA SOTO, JOSÉ RAFAEL", "1065374396"),
     ]
 
-    for usuario, clave, rol in usuarios:
+    for usuario, clave, rol, nombre_completo, documento in usuarios:
         try:
-            cursor.execute(
-                "INSERT INTO usuarios (usuario, clave, rol) VALUES (?, ?, ?)",
-                (usuario, clave, rol)
-            )
+            cursor.execute("""
+                INSERT INTO usuarios (usuario, clave, rol, nombre_completo, documento) 
+                VALUES (?, ?, ?, ?, ?)
+            """, (usuario, clave, rol, nombre_completo, documento))
         except sqlite3.IntegrityError:
-            pass
+            cursor.execute("""
+                UPDATE usuarios 
+                SET nombre_completo = ?, documento = ?
+                WHERE usuario = ?
+            """, (nombre_completo, documento, usuario))
 
     conn.commit()
     conn.close()
@@ -88,10 +116,26 @@ def validar_usuario(usuario, clave):
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT usuario, rol FROM usuarios WHERE usuario=? AND clave=?",
+        "SELECT usuario, rol, nombre_completo FROM usuarios WHERE usuario=? AND clave=?",
         (usuario, clave)
     )
     data = cursor.fetchone()
+    conn.close()
+    return data
+
+def obtener_todos_usuarios():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT usuario, rol, nombre_completo, documento FROM usuarios ORDER BY nombre_completo")
+    data = cursor.fetchall()
+    conn.close()
+    return data
+
+def obtener_profesores():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT usuario, nombre_completo FROM usuarios WHERE rol = 'profesor' ORDER BY nombre_completo")
+    data = cursor.fetchall()
     conn.close()
     return data
 
@@ -113,7 +157,7 @@ def guardar_preguntas_lote(preguntas):
             p.get("texto_base"),
             p.get("imagen"),
             json.dumps(p["opciones"], ensure_ascii=False),
-            p.get("profesor_usuario"),
+            p["profesor_usuario"],
             p["profesor_nombre"],
             p.get("lote_id")
         ))
@@ -121,7 +165,7 @@ def guardar_preguntas_lote(preguntas):
     conn.commit()
     conn.close()
 
-def listar_preguntas(grado=None, materia=None):
+def listar_preguntas(grado=None, materia=None, profesor_usuario=None):
     conn = conectar()
     cursor = conn.cursor()
 
@@ -140,6 +184,10 @@ def listar_preguntas(grado=None, materia=None):
     if materia and materia != "Todas":
         query += " AND materia=?"
         params.append(materia)
+
+    if profesor_usuario and profesor_usuario != "Todos":
+        query += " AND profesor_usuario=?"
+        params.append(profesor_usuario)
 
     query += " ORDER BY materia, numero, id"
 

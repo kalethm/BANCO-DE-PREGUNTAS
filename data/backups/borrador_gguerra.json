@@ -34,13 +34,13 @@
     },
     "3": {
       "texto_base": "",
-      "enunciado": "dscfssd",
+      "enunciado": "",
       "cantidad_opciones": 4,
       "opciones": {
-        "A": "sdfsdf",
-        "B": "sdfsdf",
-        "C": "dsfsdfsdf",
-        "D": "sdfsdf",
+        "A": "",
+        "B": "",
+        "C": "",
+        "D": "",
         "E": "",
         "F": "",
         "G": "",
@@ -321,9 +321,9 @@
       "imagen_nombre": null
     }
   },
-  "profesor_nombre_form": "pedro",
+  "profesor_nombre_form": "Guerra Diaz, Gusmara Lucia",
   "grado_form": "6",
-  "materia_form": "INGLES",
-  "pregunta_actual": 2,
-  "fecha_guardado": "2026-05-05T17:30:51.798765"
+  "materia_form": "CIENCIAS NATURALES",
+  "pregunta_actual": 1,
+  "fecha_guardado": "2026-05-05T17:36:34.959225"
 }

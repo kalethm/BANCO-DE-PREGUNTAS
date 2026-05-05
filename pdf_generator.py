@@ -67,7 +67,7 @@ def _draw_wrapped(c, text, x, y, max_width, font_name="Helvetica", font_size=9, 
     for line in lines:
         c.drawString(x, y, line)
         y -= leading
-    return y
+    return y, len(lines)  # Retorna también el número de líneas
 
 
 def _boton(c, texto, x, y, w, h, destino):
@@ -186,18 +186,40 @@ def generar_pdf_normal_compacto(preguntas, nombre_pdf="banco_preguntas_normal.pd
     gap_col = 18
     col_w = (ancho - (2 * margen_x) - gap_col) / 2
 
+    # Configuración de texto base
+    FONT_SIZE_TB = 8.5
+    ALTURA_LINEA_TB = 11
+    ALTURA_TITULO_TB = 18
+    ESPACIO_DESPUES_TB = 20
+
+    def get_altura_texto_base(texto_base):
+        """Calcula la altura necesaria para el texto base según su contenido"""
+        if not texto_base:
+            return 0, 0
+        lineas = _wrap_text(texto_base, col_w - 12, "Helvetica", FONT_SIZE_TB)
+        num_lineas = len(lineas)
+        altura = ALTURA_TITULO_TB + (num_lineas * ALTURA_LINEA_TB) + 8
+        return altura, num_lineas
+
     def estimate_height(p):
-        h = 20
+        h = 20  # Número de pregunta
+        
+        # Texto base (altura dinámica)
         if p.get("texto_base"):
-            lineas_tb = _wrap_text(p["texto_base"], col_w - 12, "Helvetica", 9)
-            # Altura fija máxima para evitar desborde
-            alto_tb = min(80, 20 + 10 * min(len(lineas_tb), 5))
-            h += alto_tb + 15  # +15 del espacio extra
+            altura_tb, _ = get_altura_texto_base(p["texto_base"])
+            h += altura_tb + ESPACIO_DESPUES_TB
+        
+        # Enunciado
         h += 12 * len(_wrap_text(p["enunciado"], col_w - 18, "Helvetica", 10))
+        
+        # Imagen
         if p.get("imagen"):
             h += 100
+        
+        # Opciones
         for letra, opcion in p["opciones"].items():
             h += 11 * len(_wrap_text(f"{letra}. {opcion}", col_w - 18, "Helvetica", 9)) + 3
+        
         return max(h + 10, 130)
 
     def draw_question(p, x, y):
@@ -206,60 +228,46 @@ def generar_pdf_normal_compacto(preguntas, nombre_pdf="banco_preguntas_normal.pd
         y -= 12
         
         if p.get("texto_base"):
-            # Calcular líneas y altura máxima
-            lineas_tb = _wrap_text(p["texto_base"], col_w - 12, "Helvetica", 9)
-            max_lineas = 5  # Máximo 5 líneas
-            alto_tb = 20 + 10 * min(len(lineas_tb), max_lineas)
-            alto_tb = min(alto_tb, 80)  # Altura máxima 80px
+            lineas_tb = _wrap_text(p["texto_base"], col_w - 12, "Helvetica", FONT_SIZE_TB)
+            num_lineas = len(lineas_tb)
+            altura_tb = ALTURA_TITULO_TB + (num_lineas * ALTURA_LINEA_TB) + 8
             
             # Fondo gris
             c.setFillColorRGB(0.94, 0.94, 0.94)
-            c.roundRect(x, y - alto_tb + 6, col_w, alto_tb, 6, fill=1, stroke=0)
+            c.roundRect(x, y - altura_tb + 6, col_w, altura_tb, 6, fill=1, stroke=0)
             
             # Borde
             c.setStrokeColorRGB(0.6, 0.6, 0.6)
             c.setLineWidth(0.8)
-            c.roundRect(x, y - alto_tb + 6, col_w, alto_tb, 6, fill=0, stroke=1)
+            c.roundRect(x, y - altura_tb + 6, col_w, altura_tb, 6, fill=0, stroke=1)
             c.setStrokeColorRGB(0, 0, 0)
             
             # Título
             c.setFillColorRGB(0, 0, 0)
             c.setFont("Helvetica-Bold", 9)
-            c.drawString(x + 6, y - 8, "📄 TEXTO BASE:")
+            c.drawString(x + 6, y - 10, "TEXTO BASE:")
             
-            # Texto (solo las primeras líneas)
-            yy = y - 22
-            c.setFont("Helvetica", 9)
-            lineas_mostradas = 0
-            for line in lineas_tb[:max_lineas]:
-                if yy < y - alto_tb + 6:
+            # Texto (todas las líneas)
+            yy = y - 25
+            c.setFont("Helvetica", FONT_SIZE_TB)
+            for line in lineas_tb:
+                if yy < y - altura_tb + 6:
                     break
                 c.drawString(x + 6, yy, line)
-                yy -= 11
-                lineas_mostradas += 1
+                yy -= ALTURA_LINEA_TB
             
-            # Si hay más texto, mostrar "..."
-            if len(lineas_tb) > max_lineas:
-                c.drawString(x + 6, yy, "...")
-            
-            # Línea separadora gruesa
-            c.setStrokeColorRGB(0.4, 0.4, 0.4)
-            c.setLineWidth(1.5)
-            c.line(x + 4, yy - 6, x + col_w - 4, yy - 6)
-            c.setStrokeColorRGB(0, 0, 0)
-            c.setLineWidth(1)
-            
-            # ESPACIO EXTRA después del texto base
-            y -= alto_tb + 18
+            # Mover la posición Y hacia abajo
+            y -= altura_tb + ESPACIO_DESPUES_TB
         
-        # Enunciado con formato destacado
+        # Enunciado
         c.setFont("Helvetica-Bold", 11)
         lineas_enc = _wrap_text(p["enunciado"], col_w - 18, "Helvetica", 11)
-        for line in lineas_enc[:8]:
+        for line in lineas_enc[:10]:
             c.drawString(x + 15, y, line)
             y -= 13
         y -= 6
         
+        # Imagen
         if p.get("imagen"):
             img_path = Path("data/images") / str(p["imagen"])
             if img_path.exists():
@@ -275,12 +283,13 @@ def generar_pdf_normal_compacto(preguntas, nombre_pdf="banco_preguntas_normal.pd
                     c.drawImage(img, img_x, y - img_h, width=img_w, height=img_h, preserveAspectRatio=True, mask="auto")
                     y -= img_h + 10
                 except Exception:
-                    y = _draw_wrapped(c, "[No se pudo cargar imagen]", x + 15, y, col_w - 18, "Helvetica", 8, 10)
+                    y = _draw_wrapped(c, "[No se pudo cargar imagen]", x + 15, y, col_w - 18, "Helvetica", 8, 10)[0]
         
+        # Opciones
         c.setFont("Helvetica", 9)
         for letra in sorted(p["opciones"].keys()):
             if p["opciones"][letra].strip():
-                y = _draw_wrapped(c, f"{letra}. {p['opciones'][letra]}", x + 15, y, col_w - 18, "Helvetica", 9, 11)
+                y = _draw_wrapped(c, f"{letra}. {p['opciones'][letra]}", x + 15, y, col_w - 18, "Helvetica", 9, 11)[0]
                 y -= 2
         return y - 8
 
@@ -342,6 +351,13 @@ def generar_pdf_interactivo_una_pregunta(preguntas, nombre_pdf="banco_preguntas_
     _boton(c, "INICIAR", ancho / 2 - 55, 48, 110, 30, "pregunta_0")
     c.showPage()
     total = len(preguntas)
+    
+    # Configuración texto base interactivo (dinámico)
+    FONT_SIZE_TB_INT = 10.5
+    ALTURA_LINEA_TB_INT = 13
+    ALTURA_TITULO_TB_INT = 25
+    ESPACIO_DESPUES_TB_INT = 30
+    
     for i, p in enumerate(preguntas):
         c.bookmarkPage(f"pregunta_{i}")
         _draw_header_interactivo(c, i, total, p["materia"], grado_texto)
@@ -351,61 +367,46 @@ def generar_pdf_interactivo_una_pregunta(preguntas, nombre_pdf="banco_preguntas_
         y -= 45
         
         if p.get("texto_base"):
-            # Calcular líneas y altura máxima
-            lineas_tb = _wrap_text(p["texto_base"], ancho - 2 * margen_x - 20, "Helvetica", 11)
-            max_lineas = 12  # Máximo 12 líneas en interactivo
-            alto_tb = 40 + 14 * min(len(lineas_tb), max_lineas)
-            alto_tb = min(alto_tb, 180)  # Altura máxima 180px
+            lineas_tb = _wrap_text(p["texto_base"], ancho - 2 * margen_x - 20, "Helvetica", FONT_SIZE_TB_INT)
+            num_lineas = len(lineas_tb)
+            altura_tb = ALTURA_TITULO_TB_INT + (num_lineas * ALTURA_LINEA_TB_INT) + 15
+            altura_tb = min(altura_tb, alto - 200)  # No puede ocupar toda la página
             
             # Fondo gris
             c.setFillColorRGB(0.94, 0.94, 0.94)
-            c.roundRect(margen_x, y - alto_tb, ancho - 2 * margen_x, alto_tb, 10, fill=1, stroke=0)
+            c.roundRect(margen_x, y - altura_tb, ancho - 2 * margen_x, altura_tb, 10, fill=1, stroke=0)
             
             # Borde
             c.setStrokeColorRGB(0.5, 0.5, 0.5)
             c.setLineWidth(1)
-            c.roundRect(margen_x, y - alto_tb, ancho - 2 * margen_x, alto_tb, 10, fill=0, stroke=1)
+            c.roundRect(margen_x, y - altura_tb, ancho - 2 * margen_x, altura_tb, 10, fill=0, stroke=1)
             c.setStrokeColorRGB(0, 0, 0)
             
             # Título
             c.setFillColorRGB(0, 0, 0)
-            c.setFont("Helvetica-Bold", 13)
-            c.drawString(margen_x + 12, y - 20, "📄 TEXTO BASE")
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(margen_x + 12, y - 18, "TEXTO BASE")
             
             # Texto
-            yy = y - 42
-            c.setFont("Helvetica", 11)
-            lineas_mostradas = 0
-            for line in lineas_tb[:max_lineas]:
-                if yy < y - alto_tb + 12:
+            yy = y - 38
+            c.setFont("Helvetica", FONT_SIZE_TB_INT)
+            for line in lineas_tb:
+                if yy < y - altura_tb + 12:
                     break
                 c.drawString(margen_x + 12, yy, line)
-                yy -= 14
-                lineas_mostradas += 1
+                yy -= ALTURA_LINEA_TB_INT
             
-            # Si hay más texto, mostrar "..."
-            if len(lineas_tb) > max_lineas:
-                c.drawString(margen_x + 12, yy, "...")
-                yy -= 14
-            
-            # Línea separadora gruesa
-            c.setStrokeColorRGB(0.4, 0.4, 0.4)
-            c.setLineWidth(2)
-            c.line(margen_x + 10, yy - 8, ancho - margen_x - 10, yy - 8)
-            c.setStrokeColorRGB(0, 0, 0)
-            c.setLineWidth(1)
-            
-            # ESPACIO EXTRA (30px) entre texto base y enunciado
-            y -= alto_tb + 32
+            y -= altura_tb + ESPACIO_DESPUES_TB_INT
         
-        # Enunciado con formato destacado
-        c.setFont("Helvetica-Bold", 14)
-        lineas_enc = _wrap_text(p["enunciado"], ancho - 2 * margen_x, "Helvetica", 14)
+        # Enunciado
+        c.setFont("Helvetica-Bold", 13)
+        lineas_enc = _wrap_text(p["enunciado"], ancho - 2 * margen_x, "Helvetica", 13)
         for line in lineas_enc[:15]:
             c.drawString(margen_x, y, line)
-            y -= 18
+            y -= 17
         y -= 15
         
+        # Imagen
         if p.get("imagen"):
             img_path = Path("data/images") / str(p["imagen"])
             if img_path.exists():
@@ -421,13 +422,14 @@ def generar_pdf_interactivo_una_pregunta(preguntas, nombre_pdf="banco_preguntas_
                     c.drawImage(img, img_x, y - img_h, width=img_w, height=img_h, preserveAspectRatio=True, mask="auto")
                     y -= img_h + 25
                 except Exception:
-                    y = _draw_wrapped(c, "[No se pudo cargar la imagen]", margen_x, y, ancho - 2 * margen_x, "Helvetica", 11, 14)
+                    y = _draw_wrapped(c, "[No se pudo cargar la imagen]", margen_x, y, ancho - 2 * margen_x, "Helvetica", 11, 14)[0]
         
-        c.setFont("Helvetica", 12)
+        # Opciones
+        c.setFont("Helvetica", 11.5)
         for letra in sorted(p["opciones"].keys()):
             if p["opciones"][letra].strip():
-                y = _draw_wrapped(c, f"{letra}. {p['opciones'][letra]}", margen_x + 20, y, ancho - 2 * margen_x - 20, "Helvetica", 12, 17)
-                y -= 6
+                y = _draw_wrapped(c, f"{letra}. {p['opciones'][letra]}", margen_x + 20, y, ancho - 2 * margen_x - 20, "Helvetica", 11.5, 16)[0]
+                y -= 5
         
         _boton(c, "🏠 INICIO", 45, 25, 90, 28, "inicio")
         if i > 0:
