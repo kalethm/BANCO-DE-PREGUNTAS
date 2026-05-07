@@ -189,7 +189,7 @@ def generar_pdf_normal_compacto(preguntas, nombre_pdf="banco_preguntas_normal.pd
     # Configuración de texto base
     FONT_SIZE_TB = 8.5
     ALTURA_LINEA_TB = 11
-    ALTURA_TITULO_TB = 18
+    ALTURA_TITULO_TB = 18  # Se mantiene para el cálculo de altura, pero no se dibuja el título
     ESPACIO_DESPUES_TB = 20
 
     def get_altura_texto_base(texto_base):
@@ -242,13 +242,13 @@ def generar_pdf_normal_compacto(preguntas, nombre_pdf="banco_preguntas_normal.pd
             c.roundRect(x, y - altura_tb + 6, col_w, altura_tb, 6, fill=0, stroke=1)
             c.setStrokeColorRGB(0, 0, 0)
             
-            # Título
-            c.setFillColorRGB(0, 0, 0)
-            c.setFont("Helvetica-Bold", 9)
-            c.drawString(x + 6, y - 10, "TEXTO BASE:")
+            # TÍTULO ELIMINADO - ya no se dibuja "TEXTO BASE:"
+            # c.setFillColorRGB(0, 0, 0)
+            # c.setFont("Helvetica-Bold", 9)
+            # c.drawString(x + 6, y - 10, "TEXTO BASE:")
             
-            # Texto (todas las líneas)
-            yy = y - 25
+            # Texto (todas las líneas) - se dibuja más arriba para compensar la falta del título
+            yy = y - 12  # Antes era y - 25, ahora es y - 12 (menos espacio porque no hay título)
             c.setFont("Helvetica", FONT_SIZE_TB)
             for line in lineas_tb:
                 if yy < y - altura_tb + 6:
@@ -382,13 +382,13 @@ def generar_pdf_interactivo_una_pregunta(preguntas, nombre_pdf="banco_preguntas_
             c.roundRect(margen_x, y - altura_tb, ancho - 2 * margen_x, altura_tb, 10, fill=0, stroke=1)
             c.setStrokeColorRGB(0, 0, 0)
             
-            # Título
-            c.setFillColorRGB(0, 0, 0)
-            c.setFont("Helvetica-Bold", 12)
-            c.drawString(margen_x + 12, y - 18, "TEXTO BASE")
+            # TÍTULO ELIMINADO - ya no se dibuja "TEXTO BASE"
+            # c.setFillColorRGB(0, 0, 0)
+            # c.setFont("Helvetica-Bold", 12)
+            # c.drawString(margen_x + 12, y - 18, "TEXTO BASE")
             
-            # Texto
-            yy = y - 38
+            # Texto - se dibuja más arriba para compensar
+            yy = y - 28  # Antes era y - 38, ahora es y - 28
             c.setFont("Helvetica", FONT_SIZE_TB_INT)
             for line in lineas_tb:
                 if yy < y - altura_tb + 12:

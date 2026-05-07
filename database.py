@@ -33,6 +33,7 @@ def crear_tablas():
         texto_base TEXT,
         imagen TEXT,
         opciones_json TEXT NOT NULL,
+        opciones_imagenes_json TEXT,
         profesor_usuario TEXT NOT NULL,
         profesor_nombre TEXT NOT NULL,
         lote_id TEXT,
@@ -60,6 +61,7 @@ def migrar_bd():
 
     nuevas_columnas = {
         "opciones_json": "TEXT",
+        "opciones_imagenes_json": "TEXT",
         "profesor_usuario": "TEXT",
         "profesor_nombre": "TEXT",
         "texto_base": "TEXT",
@@ -78,10 +80,7 @@ def crear_usuarios_iniciales():
     cursor = conn.cursor()
 
     usuarios = [
-        # Admin
         ("admin", "admin123", "admin", "Administrador", "00000000"),
-        
-        # Profesores
         ("dconeo", "profe123", "profesor", "Coneo Arrieta, Donaida Mercedes", "26006970"),
         ("aflorez", "profe123", "profesor", "FLOREZ AGRESOTT, ANDRES FELIPE", "1003368522"),
         ("gguerra", "profe123", "profesor", "Guerra Diaz, Gusmara Lucia", "25889369"),
@@ -147,8 +146,8 @@ def guardar_preguntas_lote(preguntas):
         cursor.execute("""
         INSERT INTO preguntas (
             grado, materia, numero, enunciado, texto_base, imagen,
-            opciones_json, profesor_usuario, profesor_nombre, lote_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            opciones_json, opciones_imagenes_json, profesor_usuario, profesor_nombre, lote_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             p["grado"],
             p["materia"],
@@ -157,6 +156,7 @@ def guardar_preguntas_lote(preguntas):
             p.get("texto_base"),
             p.get("imagen"),
             json.dumps(p["opciones"], ensure_ascii=False),
+            json.dumps(p.get("opciones_imagenes", {}), ensure_ascii=False),
             p["profesor_usuario"],
             p["profesor_nombre"],
             p.get("lote_id")
@@ -171,7 +171,7 @@ def listar_preguntas(grado=None, materia=None, profesor_usuario=None):
 
     query = """
     SELECT id, grado, materia, numero, enunciado, texto_base, imagen,
-           opciones_json, profesor_usuario, profesor_nombre, lote_id, fecha
+           opciones_json, opciones_imagenes_json, profesor_usuario, profesor_nombre, lote_id, fecha
     FROM preguntas
     WHERE 1=1
     """
@@ -201,6 +201,10 @@ def listar_preguntas(grado=None, materia=None, profesor_usuario=None):
             opciones = json.loads(r[7]) if r[7] else {}
         except Exception:
             opciones = {}
+        try:
+            opciones_imagenes = json.loads(r[8]) if r[8] else {}
+        except Exception:
+            opciones_imagenes = {}
 
         preguntas.append({
             "id": r[0],
@@ -211,12 +215,84 @@ def listar_preguntas(grado=None, materia=None, profesor_usuario=None):
             "texto_base": r[5],
             "imagen": r[6],
             "opciones": opciones,
-            "profesor_usuario": r[8],
-            "profesor_nombre": r[9],
-            "lote_id": r[10],
-            "fecha": r[11],
+            "opciones_imagenes": opciones_imagenes,
+            "profesor_usuario": r[9],
+            "profesor_nombre": r[10],
+            "lote_id": r[11],
+            "fecha": r[12],
         })
     return preguntas
+
+def obtener_preguntas_por_profesor(profesor_usuario, grado=None, materia=None):
+    """Obtiene solo las preguntas de un profesor específico"""
+    return listar_preguntas(grado, materia, profesor_usuario)
+
+# ========== FUNCIONES FALTANTES QUE CAUSABAN EL ERROR ==========
+
+def obtener_pregunta_por_id(pregunta_id):
+    """Obtiene una pregunta por su ID"""
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, grado, materia, numero, enunciado, texto_base, imagen,
+               opciones_json, opciones_imagenes_json, profesor_usuario, profesor_nombre, lote_id, fecha
+        FROM preguntas WHERE id = ?
+    """, (pregunta_id,))
+    r = cursor.fetchone()
+    conn.close()
+    
+    if r:
+        try:
+            opciones = json.loads(r[7]) if r[7] else {}
+        except Exception:
+            opciones = {}
+        try:
+            opciones_imagenes = json.loads(r[8]) if r[8] else {}
+        except Exception:
+            opciones_imagenes = {}
+        
+        return {
+            "id": r[0],
+            "grado": r[1],
+            "materia": r[2],
+            "numero": r[3],
+            "enunciado": r[4],
+            "texto_base": r[5],
+            "imagen": r[6],
+            "opciones": opciones,
+            "opciones_imagenes": opciones_imagenes,
+            "profesor_usuario": r[9],
+            "profesor_nombre": r[10],
+            "lote_id": r[11],
+            "fecha": r[12],
+        }
+    return None
+
+def actualizar_pregunta(pregunta_id, enunciado, texto_base, imagen, opciones, opciones_json):
+    """Actualiza una pregunta existente"""
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE preguntas 
+        SET enunciado = ?, texto_base = ?, imagen = ?, opciones_json = ?
+        WHERE id = ?
+    """, (enunciado, texto_base, imagen, opciones_json, pregunta_id))
+    conn.commit()
+    conn.close()
+
+def actualizar_pregunta_completa(pregunta_id, enunciado, texto_base, imagen, opciones, opciones_imagenes):
+    """Actualiza una pregunta existente incluyendo las imágenes de opciones"""
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE preguntas 
+        SET enunciado = ?, texto_base = ?, imagen = ?, opciones_json = ?, opciones_imagenes_json = ?
+        WHERE id = ?
+    """, (enunciado, texto_base, imagen, json.dumps(opciones, ensure_ascii=False), json.dumps(opciones_imagenes, ensure_ascii=False), pregunta_id))
+    conn.commit()
+    conn.close()
+
+# ========== FIN FUNCIONES FALTANTES ==========
 
 def obtener_grados():
     conn = conectar()
@@ -243,3 +319,29 @@ def eliminar_preguntas_por_ids(ids):
     cursor.execute(f"DELETE FROM preguntas WHERE id IN ({placeholders})", ids)
     conn.commit()
     conn.close()
+
+def obtener_todos_bancos_profesores():
+    """Obtiene un resumen de cuántas preguntas tiene cada profesor"""
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT profesor_usuario, profesor_nombre, COUNT(*) as total, 
+               GROUP_CONCAT(DISTINCT grado) as grados,
+               GROUP_CONCAT(DISTINCT materia) as materias
+        FROM preguntas 
+        GROUP BY profesor_usuario, profesor_nombre
+        ORDER BY profesor_nombre
+    """)
+    data = cursor.fetchall()
+    conn.close()
+    
+    resultados = []
+    for r in data:
+        resultados.append({
+            "usuario": r[0],
+            "nombre": r[1],
+            "total_preguntas": r[2],
+            "grados": r[3].split(',') if r[3] else [],
+            "materias": r[4].split(',') if r[4] else []
+        })
+    return resultados
