@@ -184,8 +184,11 @@ def validar_pregunta(datos, numero):
     cantidad = int(datos.get("cantidad_opciones", 4))
     for i in range(cantidad):
         letra = LETRAS[i]
-        if not datos.get("opciones", {}).get(letra, "").strip():
-            errores.append(f"Pregunta {numero}: falta la opción {letra}.")
+        opcion_texto = datos.get("opciones", {}).get(letra, "").strip()
+        opcion_imagen = datos.get("opciones_imagenes", {}).get(letra)
+        # La opción es válida si tiene texto O tiene imagen
+        if not opcion_texto and not opcion_imagen:
+            errores.append(f"Pregunta {numero}: la opción {letra} debe tener texto o imagen.")
     return errores
 
 def construir_preguntas_para_guardar(profesor_nombre, grado, materia, usuario):
@@ -330,16 +333,31 @@ def vista_profesor():
     
     st.markdown("---")
     st.markdown("**📄 TEXTO BASE (Opcional)**")
-    texto_base = st.text_area("", value=datos.get("texto_base", ""), key=f"texto_base_{pregunta_num}", height=100)
+    texto_base = st.text_area("", value=datos.get("texto_base", ""), key=f"texto_base_{pregunta_num}", height=100, 
+                               help="Texto o lectura que servirá como base para la pregunta")
     st.session_state["preguntas_form"][pregunta_num]["texto_base"] = texto_base
     
     st.markdown("---")
+    st.markdown("**🖼️ IMAGEN DEL ENUNCIADO (Opcional)**")
+    imagen = st.file_uploader("Subir imagen para la pregunta", type=["png", "jpg", "jpeg"], 
+                               key=f"imagen_{pregunta_num}",
+                               help="Imagen que acompañará al enunciado de la pregunta")
+    if imagen:
+        nombre_img = guardar_imagen(imagen, f"pregunta_{pregunta_num}", st.session_state["usuario"])
+        st.session_state["preguntas_form"][pregunta_num]["imagen_nombre"] = nombre_img
+        st.success("✅ Imagen cargada correctamente")
+    if st.session_state["preguntas_form"][pregunta_num].get("imagen_nombre"):
+        st.caption(f"📷 Imagen actual: {st.session_state['preguntas_form'][pregunta_num]['imagen_nombre']}")
+    
+    st.markdown("---")
     st.markdown("**❓ ENUNCIADO DE LA PREGUNTA (Obligatorio)**")
-    enunciado = st.text_area("", value=datos.get("enunciado", ""), key=f"enunciado_{pregunta_num}", height=100)
+    enunciado = st.text_area("", value=datos.get("enunciado", ""), key=f"enunciado_{pregunta_num}", height=100,
+                              help="Escriba aquí la pregunta que deben responder los estudiantes")
     st.session_state["preguntas_form"][pregunta_num]["enunciado"] = enunciado
 
     st.markdown("---")
     st.markdown("**🔘 OPCIONES DE RESPUESTA**")
+    st.caption("💡 Cada opción debe tener **texto O imagen** (o ambos)")
     cantidad_opciones = st.number_input("Cantidad de opciones", min_value=3, max_value=8, value=int(datos.get("cantidad_opciones", 4)), step=1, key=f"cantidad_opciones_{pregunta_num}")
     st.session_state["preguntas_form"][pregunta_num]["cantidad_opciones"] = cantidad_opciones
 
@@ -349,30 +367,23 @@ def vista_profesor():
         
         col_op1, col_op2 = st.columns([3, 1])
         with col_op1:
-            valor = st.text_input(f"Texto", value=datos.get("opciones", {}).get(letra, ""), key=f"opcion_{pregunta_num}_{letra}")
+            valor = st.text_input(f"Texto (opcional si hay imagen)", value=datos.get("opciones", {}).get(letra, ""), key=f"opcion_{pregunta_num}_{letra}")
             if "opciones" not in st.session_state["preguntas_form"][pregunta_num]:
                 st.session_state["preguntas_form"][pregunta_num]["opciones"] = {}
             st.session_state["preguntas_form"][pregunta_num]["opciones"][letra] = valor
         
         with col_op2:
-            imagen_opcion = st.file_uploader(f"Imagen", type=["png", "jpg", "jpeg"], key=f"img_opcion_{pregunta_num}_{letra}")
+            imagen_opcion = st.file_uploader(f"Imagen (opcional)", type=["png", "jpg", "jpeg"], key=f"img_opcion_{pregunta_num}_{letra}")
             if imagen_opcion:
                 nombre_img = guardar_imagen(imagen_opcion, f"opcion_{letra}_p{pregunta_num}", st.session_state["usuario"])
                 if "opciones_imagenes" not in st.session_state["preguntas_form"][pregunta_num]:
                     st.session_state["preguntas_form"][pregunta_num]["opciones_imagenes"] = {}
                 st.session_state["preguntas_form"][pregunta_num]["opciones_imagenes"][letra] = nombre_img
-                st.success(f"Imagen cargada para opción {letra}")
+                st.success(f"✅ Imagen cargada para opción {letra}")
+            elif st.session_state["preguntas_form"][pregunta_num].get("opciones_imagenes", {}).get(letra):
+                st.caption(f"📷 Imagen actual: {st.session_state['preguntas_form'][pregunta_num]['opciones_imagenes'][letra]}")
         
         st.markdown("---")
-
-    st.markdown("**🖼️ IMAGEN PRINCIPAL (Opcional)**")
-    imagen = st.file_uploader("Subir imagen para la pregunta", type=["png", "jpg", "jpeg"], key=f"imagen_{pregunta_num}")
-    if imagen:
-        nombre_img = guardar_imagen(imagen, f"pregunta_{pregunta_num}", st.session_state["usuario"])
-        st.session_state["preguntas_form"][pregunta_num]["imagen_nombre"] = nombre_img
-        st.success("Imagen cargada")
-    if st.session_state["preguntas_form"][pregunta_num].get("imagen_nombre"):
-        st.caption(f"Imagen: {st.session_state['preguntas_form'][pregunta_num]['imagen_nombre']}")
 
     errores_p = validar_pregunta(st.session_state["preguntas_form"][pregunta_num], pregunta_num)
     if errores_p:
@@ -597,7 +608,7 @@ def vista_admin():
                         nuevo_texto_base,
                         nombre_imagen,
                         nuevas_opciones,
-                        json.dumps(nuevas_opciones, ensure_ascii=False)
+                        None
                     )
                     st.success("Pregunta actualizada correctamente")
                     st.rerun()

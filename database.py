@@ -268,15 +268,23 @@ def obtener_pregunta_por_id(pregunta_id):
         }
     return None
 
-def actualizar_pregunta(pregunta_id, enunciado, texto_base, imagen, opciones, opciones_json):
+def actualizar_pregunta(pregunta_id, enunciado, texto_base, imagen, opciones, opciones_imagenes=None):
     """Actualiza una pregunta existente"""
     conn = conectar()
     cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE preguntas 
-        SET enunciado = ?, texto_base = ?, imagen = ?, opciones_json = ?
-        WHERE id = ?
-    """, (enunciado, texto_base, imagen, opciones_json, pregunta_id))
+    if opciones_imagenes:
+        cursor.execute("""
+            UPDATE preguntas 
+            SET enunciado = ?, texto_base = ?, imagen = ?, opciones_json = ?, opciones_imagenes_json = ?
+            WHERE id = ?
+        """, (enunciado, texto_base, imagen, json.dumps(opciones, ensure_ascii=False), 
+              json.dumps(opciones_imagenes, ensure_ascii=False), pregunta_id))
+    else:
+        cursor.execute("""
+            UPDATE preguntas 
+            SET enunciado = ?, texto_base = ?, imagen = ?, opciones_json = ?
+            WHERE id = ?
+        """, (enunciado, texto_base, imagen, json.dumps(opciones, ensure_ascii=False), pregunta_id))
     conn.commit()
     conn.close()
 
