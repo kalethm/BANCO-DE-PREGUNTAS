@@ -382,20 +382,26 @@ def generar_pdf_normal_compacto(
         if p.get("imagen"):
             h += 110
 
+        # Altura para imágenes de opciones
+        opciones_imagenes = p.get("opciones_imagenes", {})
+
         for letra in sorted(p["opciones"].keys()):
 
-            opcion_texto = str(
-                p["opciones"].get(letra) or ""
-            ).strip()
+            if opciones_imagenes.get(letra):
+                h += 130  # Altura para imagen de opción
+            else:
+                opcion_texto = str(
+                    p["opciones"].get(letra) or ""
+                ).strip()
 
-            lineas_op = _wrap_text(
-                f"{letra}. {opcion_texto}",
-                col_w - 18,
-                "Helvetica",
-                9,
-            )
+                lineas_op = _wrap_text(
+                    f"{letra}. {opcion_texto}",
+                    col_w - 18,
+                    "Helvetica",
+                    9,
+                )
 
-            h += (len(lineas_op) * 11) + 6
+                h += (len(lineas_op) * 11) + 6
 
         return h + 20
 
@@ -535,24 +541,106 @@ def generar_pdf_normal_compacto(
 
         c.setFont("Helvetica", 9)
 
+        opciones_imagenes = p.get("opciones_imagenes", {})
+
         for letra in sorted(p["opciones"].keys()):
 
             opcion_texto = str(
                 p["opciones"].get(letra) or ""
             ).strip()
 
-            y = _draw_wrapped(
-                c,
-                f"{letra}. {opcion_texto}",
-                x + 15,
-                y,
-                col_w - 18,
-                "Helvetica",
-                9,
-                11,
-            )[0]
+            tiene_imagen_opcion = opciones_imagenes.get(letra)
 
-            y -= 2
+            if tiene_imagen_opcion:
+
+                img_path = Path("data/images") / str(tiene_imagen_opcion)
+
+                if img_path.exists():
+
+                    try:
+                        # Mostrar la letra de la opción
+                        c.setFont("Helvetica-Bold", 9)
+                        c.drawString(x + 5, y, f"{letra}.")
+
+                        # Cargar y mostrar la imagen
+                        img = ImageReader(str(img_path))
+                        iw, ih = img.getSize()
+                        max_w = col_w - 40
+                        max_h = 100
+                        scale = min(max_w / iw, max_h / ih)
+                        img_w = iw * scale
+                        img_h = ih * scale
+                        img_x = x + 25
+
+                        c.drawImage(
+                            img,
+                            img_x,
+                            y - img_h,
+                            width=img_w,
+                            height=img_h,
+                            preserveAspectRatio=True,
+                            mask="auto",
+                        )
+
+                        y -= img_h + 12
+
+                        # Si también hay texto, mostrarlo debajo
+                        if opcion_texto:
+                            c.setFont("Helvetica", 9)
+                            lineas_op_img = _wrap_text(
+                                opcion_texto,
+                                col_w - 30,
+                                "Helvetica",
+                                9,
+                            )
+                            for line in lineas_op_img:
+                                y -= 11
+                                c.drawString(x + 25, y, line)
+                            y -= 6
+
+                    except Exception:
+                        # Si falla la imagen, mostrar solo texto
+                        c.setFont("Helvetica", 9)
+                        y = _draw_wrapped(
+                            c,
+                            f"{letra}. {opcion_texto}",
+                            x + 15,
+                            y,
+                            col_w - 18,
+                            "Helvetica",
+                            9,
+                            11,
+                        )[0]
+                        y -= 2
+
+                else:
+                    # Imagen no encontrada, mostrar solo texto
+                    c.setFont("Helvetica", 9)
+                    y = _draw_wrapped(
+                        c,
+                        f"{letra}. {opcion_texto}",
+                        x + 15,
+                        y,
+                        col_w - 18,
+                        "Helvetica",
+                        9,
+                        11,
+                    )[0]
+                    y -= 2
+
+            else:
+                # Sin imagen, mostrar solo texto
+                y = _draw_wrapped(
+                    c,
+                    f"{letra}. {opcion_texto}",
+                    x + 15,
+                    y,
+                    col_w - 18,
+                    "Helvetica",
+                    9,
+                    11,
+                )[0]
+                y -= 2
 
         return y - 8
 

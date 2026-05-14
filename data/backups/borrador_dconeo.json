@@ -2,7 +2,7 @@
   "preguntas_form": {
     "1": {
       "texto_base": "",
-      "enunciado": "sdsdsdsd",
+      "enunciado": "",
       "cantidad_opciones": 4,
       "opciones": {
         "A": "",
@@ -15,10 +15,10 @@
         "H": ""
       },
       "opciones_imagenes": {
-        "A": "dconeo_opcion_A_p1_7eee3a16655f42ac9b6cf7617a81ebe1_kaleth_maza-hv-removebg-preview.png",
-        "B": "dconeo_opcion_B_p1_763e4faa0dd44840af53ae96a5b22772_kaleth_maza-hv-removebg-preview.png",
-        "C": "dconeo_opcion_C_p1_51c9d0ca3370407b8a8002f0f46a1cd0_kaleth_maza-hv-removebg-preview.png",
-        "D": "dconeo_opcion_D_p1_3863ffc9298341eca1297c9b74ba0465_kaleth_maza-hv-removebg-preview.png",
+        "A": null,
+        "B": null,
+        "C": null,
+        "D": null,
         "E": null,
         "F": null,
         "G": null,
@@ -524,6 +524,6 @@
   "profesor_nombre_form": "Coneo Arrieta, Donaida Mercedes",
   "grado_form": "6",
   "materia_form": "CIENCIAS NATURALES",
-  "pregunta_actual": 2,
-  "fecha_guardado": "2026-05-08T07:56:53.042029"
+  "pregunta_actual": 1,
+  "fecha_guardado": "2026-05-14T09:29:57.563126"
 }
