@@ -307,7 +307,7 @@ def _draw_header_interactivo(
 
 
 # =========================================================
-# PDF NORMAL
+# PDF NORMAL - UNA SOLA COLUMNA (MODIFICADO)
 # =========================================================
 
 def generar_pdf_normal_compacto(
@@ -334,24 +334,21 @@ def generar_pdf_normal_compacto(
 
     ancho, alto = letter
 
-    margen_x = 36
-    bottom_y = 48
-    gap_col = 18
+    margen_x = 48  # Margen izquierdo y derecho (más espacio para una columna)
+    margen_y = 65  # Margen superior después del encabezado
+    bottom_y = 48  # Margen inferior
+    
+    # Ancho de la columna (una sola columna ocupa casi todo el ancho)
+    col_w = ancho - (2 * margen_x)
 
-    col_w = (
-        ancho
-        - (2 * margen_x)
-        - gap_col
-    ) / 2
-
-    FONT_SIZE_TB = 8.5
-    ALTURA_LINEA_TB = 11
+    FONT_SIZE_TB = 9
+    ALTURA_LINEA_TB = 12
     ESPACIO_DESPUES_TB = 15
     PADDING_TB = 12
 
     def estimate_height(p):
-
-        h = 40
+        """Estima la altura que ocupará una pregunta"""
+        h = 45  # Altura base (número de pregunta + espacio)
 
         texto_base = p.get("texto_base")
 
@@ -359,7 +356,7 @@ def generar_pdf_normal_compacto(
 
             lineas_tb = _wrap_text(
                 texto_base,
-                col_w - 12,
+                col_w - 20,
                 "Helvetica",
                 FONT_SIZE_TB,
             )
@@ -372,41 +369,59 @@ def generar_pdf_normal_compacto(
 
         lineas_enc = _wrap_text(
             f"{p['numero']}. {p['enunciado']}",
-            col_w - 10,
+            col_w - 15,
             "Helvetica",
             11,
         )
 
-        h += len(lineas_enc) * 13
+        h += len(lineas_enc) * 14
 
         if p.get("imagen"):
             h += 110
 
-        # Altura para imágenes de opciones
         opciones_imagenes = p.get("opciones_imagenes", {})
+        opciones_ecuaciones = p.get("opciones_ecuaciones", {})
 
         for letra in sorted(p["opciones"].keys()):
 
             if opciones_imagenes.get(letra):
-                h += 130  # Altura para imagen de opción
+                h += 130
+            elif opciones_ecuaciones.get(letra):
+                # Para ecuaciones, estimar líneas
+                ecuacion = opciones_ecuaciones.get(letra, "")
+                lineas_eq = _wrap_text(
+                    f"{letra}. {ecuacion}",
+                    col_w - 20,
+                    "Helvetica-Oblique",
+                    9,
+                )
+                h += (len(lineas_eq) * 12) + 10
             else:
                 opcion_texto = str(
                     p["opciones"].get(letra) or ""
                 ).strip()
-
-                lineas_op = _wrap_text(
-                    f"{letra}. {opcion_texto}",
-                    col_w - 18,
-                    "Helvetica",
-                    9,
-                )
-
+                
+                # Si la opción comienza con $, es una ecuación
+                if opcion_texto.startswith('$') and opcion_texto.endswith('$'):
+                    lineas_op = _wrap_text(
+                        f"{letra}. {opcion_texto}",
+                        col_w - 20,
+                        "Helvetica-Oblique",
+                        9,
+                    )
+                else:
+                    lineas_op = _wrap_text(
+                        f"{letra}. {opcion_texto}",
+                        col_w - 20,
+                        "Helvetica",
+                        9,
+                    )
                 h += (len(lineas_op) * 11) + 6
 
         return h + 20
 
     def draw_question(p, x, y):
-
+        """Dibuja una pregunta en la posición dada"""
         texto_base = p.get("texto_base")
 
         texto_base = str(texto_base or "")
@@ -422,7 +437,7 @@ def generar_pdf_normal_compacto(
 
             lineas_tb = _wrap_text(
                 texto_base,
-                col_w - 12,
+                col_w - 20,
                 "Helvetica",
                 FONT_SIZE_TB,
             )
@@ -473,7 +488,7 @@ def generar_pdf_normal_compacto(
             for line in lineas_tb:
 
                 c.drawString(
-                    x + 6,
+                    x + 8,
                     yy,
                     line,
                 )
@@ -482,21 +497,27 @@ def generar_pdf_normal_compacto(
 
             y -= altura_tb + ESPACIO_DESPUES_TB
 
+        # Dibujar el número y enunciado de la pregunta
         c.setFont("Helvetica-Bold", 11)
-
+        
+        # Procesar el enunciado (podría contener ecuaciones)
+        enunciado = p['enunciado']
+        
+        # Dividir el enunciado en líneas
         lineas_enc = _wrap_text(
-            f"{p['numero']}. {p['enunciado']}",
-            col_w - 10,
+            f"{p['numero']}. {enunciado}",
+            col_w - 15,
             "Helvetica",
             11,
         )
 
         for line in lineas_enc:
             c.drawString(x, y, line)
-            y -= 13
+            y -= 14
 
         y -= 6
 
+        # Dibujar imagen de la pregunta si existe
         if p.get("imagen"):
 
             img_path = Path("data/images") / str(p["imagen"])
@@ -509,8 +530,8 @@ def generar_pdf_normal_compacto(
 
                     iw, ih = img.getSize()
 
-                    max_w = col_w - 20
-                    max_h = 90
+                    max_w = col_w - 40
+                    max_h = 200
 
                     scale = min(
                         max_w / iw,
@@ -520,9 +541,7 @@ def generar_pdf_normal_compacto(
                     img_w = iw * scale
                     img_h = ih * scale
 
-                    img_x = x + (
-                        (col_w - img_w) / 2
-                    )
+                    img_x = x + ((col_w - img_w) / 2)
 
                     c.drawImage(
                         img,
@@ -534,39 +553,38 @@ def generar_pdf_normal_compacto(
                         mask="auto",
                     )
 
-                    y -= img_h + 10
+                    y -= img_h + 15
 
                 except Exception:
                     pass
 
+        # Dibujar opciones
         c.setFont("Helvetica", 9)
-
+        
         opciones_imagenes = p.get("opciones_imagenes", {})
+        opciones_ecuaciones = p.get("opciones_ecuaciones", {})
+        opciones_tipos = p.get("opciones_tipos", {})
 
         for letra in sorted(p["opciones"].keys()):
+            
+            tiene_imagen = opciones_imagenes.get(letra)
+            tiene_ecuacion = opciones_ecuaciones.get(letra)
+            opcion_texto = str(p["opciones"].get(letra) or "").strip()
 
-            opcion_texto = str(
-                p["opciones"].get(letra) or ""
-            ).strip()
-
-            tiene_imagen_opcion = opciones_imagenes.get(letra)
-
-            if tiene_imagen_opcion:
-
-                img_path = Path("data/images") / str(tiene_imagen_opcion)
+            if tiene_imagen:
+                # Mostrar la letra de la opción
+                c.setFont("Helvetica-Bold", 9)
+                c.drawString(x + 5, y, f"{letra}.")
+                
+                # Cargar y mostrar la imagen
+                img_path = Path("data/images") / str(tiene_imagen)
 
                 if img_path.exists():
-
                     try:
-                        # Mostrar la letra de la opción
-                        c.setFont("Helvetica-Bold", 9)
-                        c.drawString(x + 5, y, f"{letra}.")
-
-                        # Cargar y mostrar la imagen
                         img = ImageReader(str(img_path))
                         iw, ih = img.getSize()
-                        max_w = col_w - 40
-                        max_h = 100
+                        max_w = col_w - 60
+                        max_h = 120
                         scale = min(max_w / iw, max_h / ih)
                         img_w = iw * scale
                         img_h = ih * scale
@@ -585,11 +603,11 @@ def generar_pdf_normal_compacto(
                         y -= img_h + 12
 
                         # Si también hay texto, mostrarlo debajo
-                        if opcion_texto:
+                        if opcion_texto and opcion_texto != "[IMAGEN]":
                             c.setFont("Helvetica", 9)
                             lineas_op_img = _wrap_text(
                                 opcion_texto,
-                                col_w - 30,
+                                col_w - 40,
                                 "Helvetica",
                                 9,
                             )
@@ -597,46 +615,72 @@ def generar_pdf_normal_compacto(
                                 y -= 11
                                 c.drawString(x + 25, y, line)
                             y -= 6
-
                     except Exception:
-                        # Si falla la imagen, mostrar solo texto
+                        # Si falla la imagen, mostrar texto
                         c.setFont("Helvetica", 9)
                         y = _draw_wrapped(
                             c,
                             f"{letra}. {opcion_texto}",
                             x + 15,
                             y,
-                            col_w - 18,
+                            col_w - 25,
                             "Helvetica",
                             9,
                             11,
                         )[0]
                         y -= 2
-
                 else:
-                    # Imagen no encontrada, mostrar solo texto
+                    # Imagen no encontrada, mostrar texto
                     c.setFont("Helvetica", 9)
                     y = _draw_wrapped(
                         c,
                         f"{letra}. {opcion_texto}",
                         x + 15,
                         y,
-                        col_w - 18,
+                        col_w - 25,
                         "Helvetica",
                         9,
                         11,
                     )[0]
                     y -= 2
-
+                    
+            elif tiene_ecuacion:
+                # Mostrar opción como ecuación
+                c.setFont("Helvetica-Bold", 9)
+                c.drawString(x + 5, y, f"{letra}.")
+                
+                # Mostrar la ecuación en cursiva
+                c.setFont("Helvetica-Oblique", 9)
+                ecuacion_texto = tiene_ecuacion
+                lineas_eq = _wrap_text(
+                    ecuacion_texto,
+                    col_w - 30,
+                    "Helvetica-Oblique",
+                    9,
+                )
+                for line in lineas_eq:
+                    y -= 11
+                    c.drawString(x + 20, y, line)
+                y -= 6
+                
+                # Restaurar fuente normal
+                c.setFont("Helvetica", 9)
+                
             else:
-                # Sin imagen, mostrar solo texto
+                # Opción de texto normal
+                # Verificar si el texto es una ecuación (empieza con $)
+                if opcion_texto.startswith('$') and opcion_texto.endswith('$'):
+                    c.setFont("Helvetica-Oblique", 9)
+                else:
+                    c.setFont("Helvetica", 9)
+                    
                 y = _draw_wrapped(
                     c,
                     f"{letra}. {opcion_texto}",
                     x + 15,
                     y,
-                    col_w - 18,
-                    "Helvetica",
+                    col_w - 25,
+                    "Helvetica" if not (opcion_texto.startswith('$') and opcion_texto.endswith('$')) else "Helvetica-Oblique",
                     9,
                     11,
                 )[0]
@@ -644,6 +688,7 @@ def generar_pdf_normal_compacto(
 
         return y - 8
 
+    # Portada
     _draw_cover(
         c,
         preguntas,
@@ -656,19 +701,18 @@ def generar_pdf_normal_compacto(
 
     c.showPage()
 
+    # Agrupar preguntas por materia
     materias_orden = []
-
     por_materia = defaultdict(list)
 
     for p in preguntas:
-
         if p["materia"] not in por_materia:
             materias_orden.append(p["materia"])
-
         por_materia[p["materia"]].append(p)
 
     page_num = 2
 
+    # Procesar cada materia
     for materia in materias_orden:
 
         _draw_header_normal(
@@ -679,35 +723,26 @@ def generar_pdf_normal_compacto(
         )
 
         c.setFont("Helvetica-Bold", 14)
-
         c.drawCentredString(
             ancho / 2,
             alto - 45,
             materia.upper(),
         )
 
-        col = 0
-
-        y_positions = [
-            alto - 85,
-            alto - 85,
-        ]
-
-        x_positions = [
-            margen_x,
-            margen_x + col_w + gap_col,
-        ]
-
+        # Posición Y inicial para la primera pregunta (después del título)
+        y_position = alto - 95
+        
+        # Iterar sobre las preguntas de esta materia (una columna)
         for p in por_materia[materia]:
 
             needed = estimate_height(p)
 
-            if y_positions[col] - needed < bottom_y:
-
+            # Si no cabe en la página actual, crear nueva página
+            if y_position - needed < bottom_y:
                 c.showPage()
-
                 page_num += 1
 
+                # Dibujar encabezado en la nueva página
                 _draw_header_normal(
                     c,
                     page_num,
@@ -716,32 +751,25 @@ def generar_pdf_normal_compacto(
                 )
 
                 c.setFont("Helvetica-Bold", 14)
-
                 c.drawCentredString(
                     ancho / 2,
                     alto - 45,
                     materia.upper(),
                 )
 
-                y_positions = [
-                    alto - 85,
-                    alto - 85,
-                ]
+                y_position = alto - 95
 
-                col = 0
-
-            y_positions[col] = draw_question(
+            # Dibujar la pregunta
+            y_position = draw_question(
                 p,
-                x_positions[col],
-                y_positions[col],
+                margen_x,
+                y_position,
             )
 
-            y_positions[col] -= 12
-
-            col = 1 - col
+            # Espacio entre preguntas
+            y_position -= 15
 
         c.showPage()
-
         page_num += 1
 
     c.save()
@@ -750,7 +778,7 @@ def generar_pdf_normal_compacto(
 
 
 # =========================================================
-# PDF INTERACTIVO
+# PDF INTERACTIVO (sin cambios, una pregunta por página)
 # =========================================================
 
 def generar_pdf_interactivo_una_pregunta(
@@ -781,10 +809,7 @@ def generar_pdf_interactivo_una_pregunta(
 
     margen_x = 52
 
-    # =====================================================
     # PORTADA
-    # =====================================================
-
     _draw_cover(
         c,
         preguntas,
@@ -953,24 +978,42 @@ def generar_pdf_interactivo_una_pregunta(
                     pass
 
         c.setFont("Helvetica", 11)
+        
+        opciones_ecuaciones = p.get("opciones_ecuaciones", {})
+        opciones_imagenes = p.get("opciones_imagenes", {})
 
         for letra in sorted(p["opciones"].keys()):
 
             opcion_texto = str(
                 p["opciones"].get(letra) or ""
             ).strip()
-
-            y = _draw_wrapped(
-                c,
-                f"{letra}. {opcion_texto}",
-                margen_x + 20,
-                y,
-                ancho - 2 * margen_x - 20,
-                "Helvetica",
-                11,
-                16,
-            )[0]
-
+            
+            # Verificar si es ecuación
+            if opciones_ecuaciones.get(letra):
+                c.setFont("Helvetica-Oblique", 11)
+                y = _draw_wrapped(
+                    c,
+                    f"{letra}. {opciones_ecuaciones[letra]}",
+                    margen_x + 20,
+                    y,
+                    ancho - 2 * margen_x - 20,
+                    "Helvetica-Oblique",
+                    11,
+                    16,
+                )[0]
+                c.setFont("Helvetica", 11)
+            else:
+                y = _draw_wrapped(
+                    c,
+                    f"{letra}. {opcion_texto}",
+                    margen_x + 20,
+                    y,
+                    ancho - 2 * margen_x - 20,
+                    "Helvetica",
+                    11,
+                    16,
+                )[0]
+                
             y -= 5
 
             opcion_imagen = p.get(

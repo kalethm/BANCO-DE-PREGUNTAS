@@ -353,3 +353,33 @@ def obtener_todos_bancos_profesores():
             "materias": r[4].split(',') if r[4] else []
         })
     return resultados
+
+
+# Agregar esta función al final de database.py
+
+def actualizar_pregunta_con_tipos(pregunta_id, enunciado, texto_base, imagen, 
+                                   opciones, opciones_tipos, opciones_imagenes,
+                                   opciones_ecuaciones):
+    """Actualiza una pregunta incluyendo tipos de opciones y ecuaciones"""
+    conn = conectar()
+    cursor = conn.cursor()
+    
+    # Guardar toda la información de opciones en un solo JSON
+    opciones_data = {
+        "textos": opciones,
+        "tipos": opciones_tipos,
+        "imagenes": opciones_imagenes,
+        "ecuaciones": opciones_ecuaciones
+    }
+    
+    cursor.execute("""
+        UPDATE preguntas 
+        SET enunciado = ?, texto_base = ?, imagen = ?, 
+            opciones_json = ?, opciones_imagenes_json = ?
+        WHERE id = ?
+    """, (enunciado, texto_base, imagen, 
+          json.dumps(opciones_data, ensure_ascii=False), 
+          json.dumps(opciones_imagenes, ensure_ascii=False), 
+          pregunta_id))
+    conn.commit()
+    conn.close()

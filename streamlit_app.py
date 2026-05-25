@@ -4,6 +4,7 @@ import pandas as pd
 from uuid import uuid4
 import json
 from datetime import datetime
+import re
 
 from database import (
     crear_tablas,
@@ -23,6 +24,7 @@ from database import (
     actualizar_pregunta_completa,
 )
 from pdf_generator import generar_pdf_normal_compacto, generar_pdf_interactivo_una_pregunta
+from backup_manager import exportar_toda_base_datos, importar_backup, exportar_preguntas_filtradas
 
 st.set_page_config(
     page_title="Banco de Preguntas",
@@ -51,8 +53,54 @@ MATERIAS = [
     "CIENCIAS NATURALES - FISICA",
 ]
 
+# Materias que requieren editor de ecuaciones
+MATERIAS_CON_ECUACIONES = ["MATEMATICAS", "CIENCIAS NATURALES - FISICA", "CIENCIAS NATURALES - QUÍMICA"]
+
 LETRAS = list("ABCDEFGH")
 TOTAL_PREGUNTAS = 20
+
+# ============ FUNCIONES PARA ECUACIONES ============
+
+def render_latex_preview(text):
+    """Muestra vista previa de ecuaciones LaTeX"""
+    if not text:
+        return
+    
+    # Buscar ecuaciones en el texto
+    eq_pattern = r'\$\$(.*?)\$\$|\$(.*?)\$'
+    equations = re.findall(eq_pattern, text, re.DOTALL)
+    
+    if equations:
+        for eq in equations[:3]:  # Mostrar máximo 3 ecuaciones
+            eq_text = eq[0] if eq[0] else eq[1]
+            if eq_text and eq_text.strip():
+                try:
+                    st.latex(eq_text)
+                except:
+                    pass
+
+def equation_editor(key, value="", height=100, label="Contenido"):
+    """Editor de ecuaciones con vista previa LaTeX"""
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        text = st.text_area(
+            label,
+            value=value,
+            key=f"eq_input_{key}",
+            height=height,
+            help="Usa $...$ para ecuaciones inline o $$...$$ para ecuaciones centradas"
+        )
+    
+    with col2:
+        st.markdown("**📐 Vista previa de ecuaciones:**")
+        if text:
+            render_latex_preview(text)
+        st.caption("💡 Ejemplos:\n- $E = mc^2$\n- $$\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$\n- $\\vec{F} = m\\vec{a}$")
+    
+    return text
+
+# ============ FUNCIONES DE RESPALDO ============
 
 def get_backup_file(usuario):
     return Path(f"data/backups/borrador_{usuario}.json")
@@ -64,7 +112,20 @@ def guardar_borrador():
         try:
             preguntas_form_serializable = {}
             for k, v in st.session_state["preguntas_form"].items():
-                preguntas_form_serializable[str(k)] = v
+                # Convertir a serializable
+                preguntas_serializable = {}
+                for num, datos in v.items():
+                    preguntas_serializable[str(num)] = {
+                        "texto_base": datos.get("texto_base", ""),
+                        "enunciado": datos.get("enunciado", ""),
+                        "cantidad_opciones": datos.get("cantidad_opciones", 4),
+                        "opciones": datos.get("opciones", {}),
+                        "opciones_tipos": datos.get("opciones_tipos", {letra: "texto" for letra in LETRAS}),
+                        "opciones_ecuaciones": datos.get("opciones_ecuaciones", {}),
+                        "opciones_imagenes": datos.get("opciones_imagenes", {}),
+                        "imagen_nombre": datos.get("imagen_nombre"),
+                    }
+                preguntas_form_serializable[str(k)] = preguntas_serializable
             
             borrador = {
                 "preguntas_form": preguntas_form_serializable,
@@ -93,7 +154,10 @@ def cargar_borrador():
             if "preguntas_form" in borrador:
                 preguntas_form = {}
                 for k, v in borrador["preguntas_form"].items():
-                    preguntas_form[int(k)] = v
+                    preguntas_num = {}
+                    for num, datos in v.items():
+                        preguntas_num[int(num)] = datos
+                    preguntas_form[int(k)] = preguntas_num
                 borrador["preguntas_form"] = preguntas_form
             return borrador
         except Exception as e:
@@ -105,6 +169,8 @@ def eliminar_borrador():
         backup_file = get_backup_file(st.session_state["usuario"])
         if backup_file.exists():
             backup_file.unlink()
+
+# ============ FUNCIONES DE LOGIN ============
 
 def login():
     st.title("📚 Banco de Preguntas Institucional")
@@ -130,12 +196,16 @@ def cerrar_sesion():
         st.session_state.clear()
         st.rerun()
 
+# ============ FUNCIONES DE PREGUNTAS ============
+
 def crear_estructura_pregunta():
     return {
         "texto_base": "",
         "enunciado": "",
         "cantidad_opciones": 4,
         "opciones": {letra: "" for letra in LETRAS},
+        "opciones_tipos": {letra: "texto" for letra in LETRAS},
+        "opciones_ecuaciones": {letra: "" for letra in LETRAS},
         "opciones_imagenes": {letra: None for letra in LETRAS},
         "imagen_nombre": None,
     }
@@ -184,28 +254,55 @@ def validar_pregunta(datos, numero):
     cantidad = int(datos.get("cantidad_opciones", 4))
     for i in range(cantidad):
         letra = LETRAS[i]
-        opcion_texto = datos.get("opciones", {}).get(letra, "").strip()
-        opcion_imagen = datos.get("opciones_imagenes", {}).get(letra)
-        # La opción es válida si tiene texto O tiene imagen
-        if not opcion_texto and not opcion_imagen:
-            errores.append(f"Pregunta {numero}: la opción {letra} debe tener texto o imagen.")
+        tipo = datos.get("opciones_tipos", {}).get(letra, "texto")
+        
+        if tipo == "texto":
+            opcion_texto = datos.get("opciones", {}).get(letra, "").strip()
+            if not opcion_texto:
+                errores.append(f"Pregunta {numero}: la opción {letra} (texto) está vacía.")
+        elif tipo == "imagen":
+            opcion_imagen = datos.get("opciones_imagenes", {}).get(letra)
+            if not opcion_imagen:
+                errores.append(f"Pregunta {numero}: la opción {letra} (imagen) no tiene imagen.")
+        elif tipo == "ecuacion":
+            ecuacion = datos.get("opciones_ecuaciones", {}).get(letra, "").strip()
+            if not ecuacion:
+                errores.append(f"Pregunta {numero}: la opción {letra} (ecuación) está vacía.")
     return errores
 
 def construir_preguntas_para_guardar(profesor_nombre, grado, materia, usuario):
     lote_id = uuid4().hex
     preguntas = []
     errores = []
+    
     for numero in range(1, TOTAL_PREGUNTAS + 1):
         datos = st.session_state["preguntas_form"].get(numero, crear_estructura_pregunta())
         errores.extend(validar_pregunta(datos, numero))
+        
         cantidad = int(datos.get("cantidad_opciones", 4))
         opciones = {}
         opciones_imagenes = {}
+        opciones_ecuaciones = {}
+        opciones_tipos = datos.get("opciones_tipos", {})
+        
         for i in range(cantidad):
             letra = LETRAS[i]
-            opciones[letra] = datos.get("opciones", {}).get(letra, "").strip()
-            if datos.get("opciones_imagenes", {}).get(letra):
-                opciones_imagenes[letra] = datos["opciones_imagenes"][letra]
+            tipo = opciones_tipos.get(letra, "texto")
+            
+            if tipo == "texto":
+                opciones[letra] = datos.get("opciones", {}).get(letra, "").strip()
+            elif tipo == "imagen":
+                opciones[letra] = "[IMAGEN]"
+                if datos.get("opciones_imagenes", {}).get(letra):
+                    opciones_imagenes[letra] = datos["opciones_imagenes"][letra]
+            elif tipo == "ecuacion":
+                ecuacion = datos.get("opciones_ecuaciones", {}).get(letra, "").strip()
+                if ecuacion:
+                    opciones[letra] = f"${ecuacion}$"
+                    opciones_ecuaciones[letra] = ecuacion
+                else:
+                    opciones[letra] = ""
+        
         preguntas.append({
             "grado": grado,
             "materia": materia,
@@ -215,10 +312,13 @@ def construir_preguntas_para_guardar(profesor_nombre, grado, materia, usuario):
             "imagen": datos.get("imagen_nombre"),
             "opciones": opciones,
             "opciones_imagenes": opciones_imagenes,
+            "opciones_ecuaciones": opciones_ecuaciones,
+            "opciones_tipos": opciones_tipos,
             "profesor_usuario": usuario,
             "profesor_nombre": profesor_nombre.strip(),
             "lote_id": lote_id,
         })
+    
     return preguntas, errores
 
 def resumen_avance():
@@ -252,6 +352,8 @@ def limpiar_banco_temporal():
         preguntas_form[n] = crear_estructura_pregunta()
     st.session_state["preguntas_form"] = preguntas_form
 
+# ============ VISTA PROFESOR ============
+
 def vista_profesor():
     inicializar_banco_temporal()
     
@@ -264,7 +366,6 @@ def vista_profesor():
     preguntas_guardadas = obtener_preguntas_por_profesor(st.session_state["usuario"])
     
     if preguntas_guardadas:
-        # Agrupar por lote
         lotes = {}
         for p in preguntas_guardadas:
             lote_id = p.get("lote_id", "Sin lote")
@@ -331,6 +432,14 @@ def vista_profesor():
 
     st.markdown(f"### Pregunta {pregunta_num} de {TOTAL_PREGUNTAS}")
     
+    # Detectar si la materia requiere ecuaciones
+    materia_actual = st.session_state.get("materia_form", "")
+    requiere_ecuaciones = materia_actual in MATERIAS_CON_ECUACIONES
+    
+    if requiere_ecuaciones:
+        st.info("📐 **Modo ecuaciones activado** - Puedes usar LaTeX para escribir fórmulas")
+        st.caption("Ejemplos: $E = mc^2$, $$\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$, $\\vec{F} = m\\vec{a}$")
+    
     st.markdown("---")
     st.markdown("**📄 TEXTO BASE (Opcional)**")
     texto_base = st.text_area("", value=datos.get("texto_base", ""), key=f"texto_base_{pregunta_num}", height=100, 
@@ -351,37 +460,88 @@ def vista_profesor():
     
     st.markdown("---")
     st.markdown("**❓ ENUNCIADO DE LA PREGUNTA (Obligatorio)**")
-    enunciado = st.text_area("", value=datos.get("enunciado", ""), key=f"enunciado_{pregunta_num}", height=100,
-                              help="Escriba aquí la pregunta que deben responder los estudiantes")
+    
+    if requiere_ecuaciones:
+        enunciado = equation_editor(
+            f"enunciado_{pregunta_num}", 
+            value=datos.get("enunciado", ""),
+            height=120,
+            label="Escribe el enunciado (puedes incluir ecuaciones LaTeX)"
+        )
+    else:
+        enunciado = st.text_area(
+            "", 
+            value=datos.get("enunciado", ""), 
+            key=f"enunciado_{pregunta_num}", 
+            height=100,
+            help="Escriba aquí la pregunta que deben responder los estudiantes"
+        )
+    
     st.session_state["preguntas_form"][pregunta_num]["enunciado"] = enunciado
 
     st.markdown("---")
     st.markdown("**🔘 OPCIONES DE RESPUESTA**")
-    st.caption("💡 Cada opción debe tener **texto O imagen** (o ambos)")
-    cantidad_opciones = st.number_input("Cantidad de opciones", min_value=3, max_value=8, value=int(datos.get("cantidad_opciones", 4)), step=1, key=f"cantidad_opciones_{pregunta_num}")
+    st.caption("💡 Cada opción puede ser: **Texto**, **Imagen** o **Ecuación**")
+    
+    cantidad_opciones = st.number_input("Cantidad de opciones", min_value=3, max_value=8, 
+                                         value=int(datos.get("cantidad_opciones", 4)), 
+                                         step=1, key=f"cantidad_opciones_{pregunta_num}")
     st.session_state["preguntas_form"][pregunta_num]["cantidad_opciones"] = cantidad_opciones
 
     for i in range(cantidad_opciones):
         letra = LETRAS[i]
         st.markdown(f"**Opción {letra}**")
         
-        col_op1, col_op2 = st.columns([3, 1])
-        with col_op1:
-            valor = st.text_input(f"Texto (opcional si hay imagen)", value=datos.get("opciones", {}).get(letra, ""), key=f"opcion_{pregunta_num}_{letra}")
-            if "opciones" not in st.session_state["preguntas_form"][pregunta_num]:
-                st.session_state["preguntas_form"][pregunta_num]["opciones"] = {}
-            st.session_state["preguntas_form"][pregunta_num]["opciones"][letra] = valor
+        tipo_opcion = st.radio(
+            f"Tipo de opción {letra}",
+            ["texto", "imagen", "ecuacion"],
+            index=["texto", "imagen", "ecuacion"].index(
+                datos.get("opciones_tipos", {}).get(letra, "texto")
+            ),
+            key=f"tipo_opcion_{pregunta_num}_{letra}",
+            horizontal=True
+        )
         
-        with col_op2:
-            imagen_opcion = st.file_uploader(f"Imagen (opcional)", type=["png", "jpg", "jpeg"], key=f"img_opcion_{pregunta_num}_{letra}")
+        st.session_state["preguntas_form"][pregunta_num]["opciones_tipos"][letra] = tipo_opcion
+        
+        if tipo_opcion == "texto":
+            valor = st.text_input(
+                f"Texto de la opción {letra}", 
+                value=datos.get("opciones", {}).get(letra, ""), 
+                key=f"opcion_{pregunta_num}_{letra}"
+            )
+            st.session_state["preguntas_form"][pregunta_num]["opciones"][letra] = valor
+            
+        elif tipo_opcion == "imagen":
+            imagen_opcion = st.file_uploader(
+                f"Imagen para opción {letra}", 
+                type=["png", "jpg", "jpeg"], 
+                key=f"img_opcion_{pregunta_num}_{letra}"
+            )
             if imagen_opcion:
-                nombre_img = guardar_imagen(imagen_opcion, f"opcion_{letra}_p{pregunta_num}", st.session_state["usuario"])
-                if "opciones_imagenes" not in st.session_state["preguntas_form"][pregunta_num]:
-                    st.session_state["preguntas_form"][pregunta_num]["opciones_imagenes"] = {}
+                nombre_img = guardar_imagen(imagen_opcion, f"opcion_{letra}_p{pregunta_num}", 
+                                           st.session_state["usuario"])
                 st.session_state["preguntas_form"][pregunta_num]["opciones_imagenes"][letra] = nombre_img
                 st.success(f"✅ Imagen cargada para opción {letra}")
-            elif st.session_state["preguntas_form"][pregunta_num].get("opciones_imagenes", {}).get(letra):
+            if st.session_state["preguntas_form"][pregunta_num].get("opciones_imagenes", {}).get(letra):
                 st.caption(f"📷 Imagen actual: {st.session_state['preguntas_form'][pregunta_num]['opciones_imagenes'][letra]}")
+                
+        elif tipo_opcion == "ecuacion":
+            ecuacion = st.text_area(
+                f"Ecuación LaTeX para opción {letra}",
+                value=datos.get("opciones_ecuaciones", {}).get(letra, ""),
+                key=f"ecuacion_{pregunta_num}_{letra}",
+                height=80,
+                help="Escribe la ecuación en formato LaTeX. Ejemplo: E = mc^2  o  \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}"
+            )
+            st.session_state["preguntas_form"][pregunta_num]["opciones_ecuaciones"][letra] = ecuacion
+            
+            if ecuacion and ecuacion.strip():
+                st.markdown("**Vista previa:**")
+                try:
+                    st.latex(ecuacion)
+                except:
+                    st.warning("Ecuación no válida. Verifica la sintaxis LaTeX.")
         
         st.markdown("---")
 
@@ -447,6 +607,7 @@ def vista_profesor():
             limpiar_banco_temporal()
             st.rerun()
 
+# ============ VISTA ADMINISTRADOR ============
 
 def vista_admin():
     st.title("🛠️ Panel del Administrador")
@@ -481,7 +642,8 @@ def vista_admin():
     st.divider()
     
     # Pestañas para admin
-    tab1, tab2, tab3 = st.tabs(["📋 Ver y filtrar preguntas", "✏️ Editar preguntas", "📊 Generar PDFs con filtros múltiples"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📋 Ver y filtrar preguntas", "✏️ Editar preguntas", 
+                                       "📊 Generar PDFs con filtros múltiples", "💾 Backup/Restore"])
     
     # ==================== TAB 1: Ver y filtrar ====================
     with tab1:
@@ -501,7 +663,6 @@ def vista_admin():
         st.subheader(f"📋 Preguntas registradas ({len(preguntas)})")
         
         if preguntas:
-            # Verificar imágenes
             for p in preguntas:
                 if p.get("imagen"):
                     if not Path(f"data/images/{p['imagen']}").exists():
@@ -646,7 +807,6 @@ def vista_admin():
             else:
                 st.warning("⚠️ Seleccione al menos una materia")
         
-        # Filtro opcional por profesor
         profesor_pdf = st.selectbox(
             "👨‍🏫 Profesor (opcional)", 
             ["Todos"] + [p[0] for p in profesores], 
@@ -662,7 +822,6 @@ def vista_admin():
         with col_sesion:
             sesion_pdf = st.selectbox("Sesión", ["PRIMERA SESIÓN", "SEGUNDA SESIÓN"], index=0)
         
-        # Obtener preguntas según filtros múltiples
         preguntas_filtradas = []
         if grados_seleccionados and materias_seleccionadas:
             for g in grados_seleccionados:
@@ -670,14 +829,12 @@ def vista_admin():
                     params = listar_preguntas(g, m, profesor_pdf if profesor_pdf != "Todos" else None)
                     preguntas_filtradas.extend(params)
         
-        # Eliminar duplicados por ID y ordenar
         preguntas_filtradas = list({p["id"]: p for p in preguntas_filtradas}.values())
         preguntas_filtradas.sort(key=lambda x: (int(x["grado"]) if x["grado"].isdigit() else 99, x["materia"], x["numero"]))
         
         st.info(f"📊 **{len(preguntas_filtradas)} preguntas** encontradas con los filtros seleccionados")
         
         if preguntas_filtradas:
-            # Mostrar resumen de lo que se va a generar
             with st.expander("📋 Ver preguntas seleccionadas"):
                 for p in preguntas_filtradas[:20]:
                     st.write(f"- [{p['grado']}°] {p['materia']} - P{p['numero']}: {p['enunciado'][:80]}...")
@@ -723,7 +880,98 @@ def vista_admin():
                         st.download_button("Descargar PDF Interactivo", f, nombre_interactivo, use_container_width=True)
         else:
             st.warning("No hay preguntas con los filtros seleccionados. Ajuste los criterios de búsqueda.")
+    
+    # ==================== TAB 4: Backup/Restore ====================
+    with tab4:
+        st.subheader("💾 Copias de seguridad (Backup)")
+        
+        st.markdown("""
+        ### Exportar datos
+        Puedes exportar toda la base de datos para hacer una copia de seguridad.
+        """)
+        
+        col_exp1, col_exp2 = st.columns(2)
+        with col_exp1:
+            if st.button("📊 Exportar a Excel", use_container_width=True):
+                with st.spinner("Exportando datos..."):
+                    archivo = exportar_toda_base_datos("excel")
+                    with open(archivo, "rb") as f:
+                        st.download_button(
+                            "Descargar Backup Excel",
+                            f,
+                            Path(archivo).name,
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+        
+        with col_exp2:
+            if st.button("📄 Exportar a JSON", use_container_width=True):
+                with st.spinner("Exportando datos..."):
+                    archivo = exportar_toda_base_datos("json")
+                    with open(archivo, "rb") as f:
+                        st.download_button(
+                            "Descargar Backup JSON",
+                            f,
+                            Path(archivo).name,
+                            "application/json",
+                            use_container_width=True
+                        )
+        
+        st.divider()
+        
+        st.markdown("""
+        ### Importar datos
+        Restaura una copia de seguridad previa.
+        """)
+        
+        archivo_backup = st.file_uploader(
+            "Seleccionar archivo de backup (.xlsx o .json)",
+            type=["xlsx", "json"]
+        )
+        
+        if archivo_backup:
+            st.warning("⚠️ La importación puede sobrescribir datos existentes. Se recomienda hacer un backup antes.")
+            
+            if st.button("🔄 Importar backup", type="primary"):
+                with st.spinner("Importando datos..."):
+                    exito, mensaje = importar_backup(archivo_backup)
+                    if exito:
+                        st.success(mensaje)
+                        st.rerun()
+                    else:
+                        st.error(mensaje)
+        
+        st.divider()
+        
+        st.markdown("### 📋 Exportar preguntas filtradas")
+        st.info("Exporta solo las preguntas que coincidan con ciertos filtros")
+        
+        col_f1_exp, col_f2_exp = st.columns(2)
+        with col_f1_exp:
+            grado_export = st.selectbox("Grado", ["Todos"] + GRADOS, key="export_grado")
+        with col_f2_exp:
+            materia_export = st.selectbox("Materia", ["Todas"] + MATERIAS, key="export_materia")
+        
+        if st.button("📎 Exportar preguntas filtradas", use_container_width=True):
+            preguntas_filtradas_exp = listar_preguntas(
+                grado_export if grado_export != "Todos" else None,
+                materia_export if materia_export != "Todas" else None,
+                None
+            )
+            
+            if preguntas_filtradas_exp:
+                archivo = exportar_preguntas_filtradas(preguntas_filtradas_exp, "excel")
+                with open(archivo, "rb") as f:
+                    st.download_button(
+                        "Descargar Excel filtrado",
+                        f,
+                        Path(archivo).name,
+                        use_container_width=True
+                    )
+            else:
+                st.warning("No hay preguntas con esos filtros")
 
+# ============ MAIN ============
 
 def main():
     if "usuario" not in st.session_state:
@@ -744,7 +992,6 @@ def main():
             vista_profesor()
         else:
             st.error("Rol no reconocido")
-
 
 if __name__ == "__main__":
     main()
